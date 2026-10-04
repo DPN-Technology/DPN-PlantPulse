@@ -5,7 +5,7 @@
 
 DPN PlantPulse is a mobile-first plant intelligence platform from DPN Technology. The goal is not to create a branded clone of an existing plant identifier. PlantPulse is designed around a DPN-specific idea: every plant becomes a continuously monitored biological asset with an evolving health record.
 
-## v0.1 mobile foundation
+## v0.2 mobile data foundation
 
 The repository now contains a runnable Expo / React Native application foundation for iOS, Android, and web.
 
@@ -23,7 +23,13 @@ The repository now contains a runnable Expo / React Native application foundatio
 - My Plants collection
 - plant profile + history timeline
 - Care Command queue
-- local persistence with AsyncStorage
+- versioned local persistence with automatic v0.1 → v0.2 migration
+- persistent per-plant scan history
+- repeat scans can update an existing plant
+- real care actions with timestamped timeline writes
+- calendar-based watering and feeding schedules
+- editable plant name, room/location, care intervals, and notes
+- replaceable Plant Intelligence service contract
 - PlantPulse AI rule-based prototype
 - CI validation
 - CodeQL JavaScript/TypeScript scanning
@@ -88,7 +94,7 @@ The production score is planned to combine scan evidence, care history, environm
 
 ## Architecture
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DATA_MODEL.md](docs/DATA_MODEL.md).
 
 ## Roadmap
 
