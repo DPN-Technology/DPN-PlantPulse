@@ -712,7 +712,7 @@ const styles = StyleSheet.create({
   cameraFallback: { flex: 1, padding: 28, alignItems: "center", justifyContent: "center", gap: 14 },
   cameraFallbackTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
   cameraFallbackText: { color: colors.muted, fontSize: 12, textAlign: "center", lineHeight: 18 },
-  reticle: { ...StyleSheet.absoluteFillObject, margin: 26 },
+  reticle: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, margin: 26 },
   corner: { position: "absolute", width: 38, height: 38, borderColor: colors.green },
   tl: { left: 0, top: 0, borderLeftWidth: 3, borderTopWidth: 3 },
   tr: { right: 0, top: 0, borderRightWidth: 3, borderTopWidth: 3 },
