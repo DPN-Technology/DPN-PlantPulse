@@ -17,13 +17,31 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import { BottomNav, Card, DpnHeader, MetricBar, Pill, ScoreBadge } from "./src/components";
 import { careDueLabel, daysUntil } from "./src/care";
+import { buildCareIntelligence } from "./src/careIntelligence";
 import { seedPlants } from "./src/data";
 import { scoreBand } from "./src/engine";
-import { attachScanToPlant, completeCareAction, createPlantFromScan, updatePlantProfile } from "./src/plantService";
+import {
+  applyCareRecommendation,
+  attachScanToPlant,
+  completeCareAction,
+  createPlantFromScan,
+  recordRecommendationFeedback,
+  updatePlantProfile
+} from "./src/plantService";
 import { plantIntelligenceClient } from "./src/services/plantIntelligence";
+import { getSpeciesCareBaseline } from "./src/speciesCare";
 import { loadPlants, savePlants } from "./src/storage";
 import { colors, radius } from "./src/theme";
-import { CareAction, Plant, PlantProfileUpdate, ScanMode, ScanResult, Screen } from "./src/types";
+import {
+  CareAction,
+  CareRecommendation,
+  Plant,
+  PlantProfileUpdate,
+  RecommendationFeedbackValue,
+  ScanMode,
+  ScanResult,
+  Screen
+} from "./src/types";
 
 const modes: Array<{ key: ScanMode; label: string }> = [
   { key: "identify", label: "IDENTIFY" },
@@ -150,6 +168,21 @@ export default function App() {
     updatePlantRecord(plantId, (plant) => updatePlantProfile(plant, update));
   };
 
+  const feedbackRecommendation = (
+    plantId: string,
+    recommendationId: string,
+    value: RecommendationFeedbackValue
+  ) => {
+    updatePlantRecord(
+      plantId,
+      (plant) => recordRecommendationFeedback(plant, recommendationId, value)
+    );
+  };
+
+  const applyRecommendation = (plantId: string, recommendation: CareRecommendation) => {
+    updatePlantRecord(plantId, (plant) => applyCareRecommendation(plant, recommendation));
+  };
+
   const averageScore = Math.round(plants.reduce((sum, plant) => sum + plant.healthScore, 0) / Math.max(1, plants.length));
   const attention = plants.filter((plant) => plant.healthScore < 75);
   const dueCare = plants.filter((plant) => daysUntil(plant.nextWaterAt) <= 1 || daysUntil(plant.nextFeedAt) <= 1);
@@ -195,12 +228,21 @@ export default function App() {
           onBack={() => setScreen("collection")}
           onCare={recordCare}
           onUpdate={savePlantProfile}
+          onRecommendationFeedback={feedbackRecommendation}
+          onApplyRecommendation={applyRecommendation}
         />
       );
     }
 
     if (screen === "care") {
-      return <CareScreen plants={plants} onCare={recordCare} />;
+      return (
+        <CareScreen
+          plants={plants}
+          onCare={recordCare}
+          onRecommendationFeedback={feedbackRecommendation}
+          onApplyRecommendation={applyRecommendation}
+        />
+      );
     }
 
     if (screen === "ai") {
@@ -249,10 +291,15 @@ function HomeScreen({
   onOpen: (id: string) => void;
   onViewPlants: () => void;
 }) {
+  const predictiveWatch = plants
+    .map((plant) => ({ plant, intelligence: buildCareIntelligence(plant) }))
+    .filter(({ intelligence }) => intelligence.prediction.risk === "ELEVATED" || intelligence.prediction.risk === "HIGH")
+    .sort((a, b) => b.intelligence.prediction.confidence - a.intelligence.prediction.confidence);
+
   return (
     <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
       <DpnHeader
-        eyebrow="DPN PLANTPULSE // ONLINE"
+        eyebrow="DPN PLANTPULSE // ADAPTIVE INTELLIGENCE"
         title="Plant Intelligence"
         subtitle="Identify. Diagnose. Track. Predict. Build a living health record for every plant."
       />
@@ -290,11 +337,33 @@ function HomeScreen({
           <Text style={styles.statMeta}>PLANTS</Text>
         </Card>
         <Card style={styles.statCard}>
-          <Text style={styles.statLabel}>CARE DUE</Text>
-          <Text style={styles.statValue}>{dueCare.length}</Text>
-          <Text style={styles.statMeta}>NEXT 24H</Text>
+          <Text style={styles.statLabel}>PREDICTIVE WATCH</Text>
+          <Text style={[styles.statValue, predictiveWatch.length > 0 && { color: colors.amber }]}>{predictiveWatch.length}</Text>
+          <Text style={styles.statMeta}>{dueCare.length} CARE DUE</Text>
         </Card>
       </View>
+
+      {predictiveWatch.length > 0 ? (
+        <>
+          <SectionTitle title="PREDICTION WATCHLIST" action="7-DAY MODEL" />
+          {predictiveWatch.slice(0, 3).map(({ plant, intelligence }) => (
+            <Pressable key={plant.id} onPress={() => onOpen(plant.id)}>
+              <Card style={styles.predictiveRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.plantName}>{plant.nickname}</Text>
+                  <Text style={styles.plantLatin}>
+                    {intelligence.trend.direction} • projected {intelligence.prediction.projectedScore}/100
+                  </Text>
+                </View>
+                <View style={styles.predictionRiskBox}>
+                  <Text style={styles.predictionRisk}>{intelligence.prediction.risk}</Text>
+                  <Text style={styles.predictionConfidence}>{intelligence.prediction.confidence}% CONF</Text>
+                </View>
+              </Card>
+            </Pressable>
+          ))}
+        </>
+      ) : null}
 
       <View style={styles.sectionTitleRow}>
         <Text style={styles.sectionTitle}>PRIORITY PLANTS</Text>
@@ -321,8 +390,8 @@ function HomeScreen({
       <View style={styles.moduleGrid}>
         {[
           ["VISION", "Species + symptom analysis"],
-          ["CARE", "Adaptive care scheduling"],
-          ["PREDICT", "Health trend forecasting"],
+          ["CARE", "Adaptive recommendation engine"],
+          ["PREDICT", "7-day health trend forecasting"],
           ["SENSORS", "Future moisture + light telemetry"]
         ].map(([name, description]) => (
           <Card key={name} style={styles.moduleCard}>
@@ -332,7 +401,7 @@ function HomeScreen({
         ))}
       </View>
 
-      <Text style={styles.prototypeNote}>v0.3 now models confidence, unknown states, evidence, ranked findings, and historical comparison. The bundled local engine remains a workflow simulator until a production DPN Vision backend is connected.</Text>
+      <Text style={styles.prototypeNote}>v0.4 predictions are explainable advisory estimates derived from saved scans and care events. They are not sensor measurements and never auto-change care schedules.</Text>
     </ScrollView>
   );
 }
@@ -720,16 +789,65 @@ function CollectionScreen({ plants, onOpen }: { plants: Plant[]; onOpen: (id: st
   );
 }
 
+function RecommendationCard({
+  plant,
+  recommendation,
+  onFeedback,
+  onApply
+}: {
+  plant: Plant;
+  recommendation: CareRecommendation;
+  onFeedback: (plantId: string, recommendationId: string, value: RecommendationFeedbackValue) => void;
+  onApply: (plantId: string, recommendation: CareRecommendation) => void;
+}) {
+  const feedback = plant.recommendationFeedback.find((item) => item.recommendationId === recommendation.id);
+  const canApply = recommendation.suggestedWaterIntervalDays !== undefined || recommendation.suggestedFeedIntervalDays !== undefined;
+
+  return (
+    <Card style={styles.recommendationCard}>
+      <View style={styles.recommendationTop}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.recommendationMeta}>{recommendation.priority} // {recommendation.category.toUpperCase()}</Text>
+          <Text style={styles.recommendationTitle}>{recommendation.title}</Text>
+        </View>
+        <Text style={styles.recommendationConfidence}>{recommendation.confidence}%</Text>
+      </View>
+      <Text style={styles.recommendationDetail}>{recommendation.detail}</Text>
+      {recommendation.rationale.map((reason) => (
+        <Text key={reason} style={styles.recommendationReason}>• {reason}</Text>
+      ))}
+      {feedback ? <Text style={styles.feedbackState}>YOUR FEEDBACK // {feedback.value}</Text> : null}
+      <View style={styles.recommendationActions}>
+        <Pressable style={styles.feedbackButton} onPress={() => onFeedback(plant.id, recommendation.id, "HELPFUL")}>
+          <Text style={styles.feedbackButtonText}>HELPFUL</Text>
+        </Pressable>
+        <Pressable style={styles.feedbackButton} onPress={() => onFeedback(plant.id, recommendation.id, "DISMISSED")}>
+          <Text style={styles.feedbackButtonText}>DISMISS</Text>
+        </Pressable>
+        {canApply ? (
+          <Pressable style={styles.applyButton} onPress={() => onApply(plant.id, recommendation)}>
+            <Text style={styles.applyButtonText}>APPLY CHANGE</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </Card>
+  );
+}
+
 function PlantScreen({
   plant,
   onBack,
   onCare,
-  onUpdate
+  onUpdate,
+  onRecommendationFeedback,
+  onApplyRecommendation
 }: {
   plant: Plant;
   onBack: () => void;
   onCare: (plantId: string, action: CareAction) => void;
   onUpdate: (plantId: string, update: PlantProfileUpdate) => void;
+  onRecommendationFeedback: (plantId: string, recommendationId: string, value: RecommendationFeedbackValue) => void;
+  onApplyRecommendation: (plantId: string, recommendation: CareRecommendation) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [nickname, setNickname] = useState(plant.nickname);
@@ -737,6 +855,8 @@ function PlantScreen({
   const [waterInterval, setWaterInterval] = useState(String(plant.carePlan.waterIntervalDays));
   const [feedInterval, setFeedInterval] = useState(String(plant.carePlan.feedIntervalDays));
   const [notes, setNotes] = useState(plant.notes ?? "");
+  const intelligence = useMemo(() => buildCareIntelligence(plant), [plant]);
+  const speciesBaseline = useMemo(() => getSpeciesCareBaseline(plant), [plant]);
 
   useEffect(() => {
     setNickname(plant.nickname);
@@ -768,14 +888,60 @@ function PlantScreen({
       <Pressable onPress={onBack}><Text style={styles.back}>← PLANT NETWORK</Text></Pressable>
       <View style={styles.profileTop}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.eyebrow}>PLANT PROFILE // {plant.location.toUpperCase()}</Text>
+          <Text style={styles.eyebrow}>PLANT PROFILE // ADAPTIVE INTELLIGENCE</Text>
           <Text style={styles.resultName}>{plant.nickname}</Text>
-          <Text style={styles.plantLatin}>{plant.commonName} • {plant.scientificName}</Text>
+          <Text style={styles.plantLatin}>{plant.commonName} • {plant.scientificName} • {plant.location}</Text>
         </View>
         <ScoreBadge score={plant.healthScore} band={scoreBand(plant.healthScore)} />
       </View>
 
       {plant.imageUri ? <Image source={{ uri: plant.imageUri }} style={styles.resultImage} /> : null}
+
+      <SectionTitle title="PREDICTION ENGINE" action="7-DAY ADVISORY" />
+      <Card style={styles.predictionCard}>
+        <View style={styles.predictionHeader}>
+          <View>
+            <Text style={styles.predictionLabel}>PROJECTED PLANTPULSE</Text>
+            <Text style={styles.projectedScore}>{intelligence.prediction.projectedScore}</Text>
+          </View>
+          <View style={styles.predictionRiskBox}>
+            <Text style={styles.predictionRisk}>{intelligence.prediction.risk}</Text>
+            <Text style={styles.predictionConfidence}>{intelligence.prediction.confidence}% CONFIDENCE</Text>
+          </View>
+        </View>
+        <View style={styles.trendRow}>
+          <Text style={styles.trendDirection}>{intelligence.trend.direction}</Text>
+          <Text style={styles.trendMeta}>
+            {intelligence.trend.scoreDelta >= 0 ? "+" : ""}{intelligence.trend.scoreDelta} points • {intelligence.trend.sampleCount} scans
+          </Text>
+        </View>
+        <Text style={styles.infoBody}>{intelligence.trend.summary}</Text>
+        {intelligence.prediction.reasons.map((reason) => (
+          <Text key={reason} style={styles.predictionReason}>• {reason}</Text>
+        ))}
+        <Text style={styles.predictionDisclaimer}>{intelligence.prediction.disclaimer}</Text>
+      </Card>
+
+      {speciesBaseline ? (
+        <Card style={styles.speciesBaselineCard}>
+          <Text style={styles.infoTitle}>SPECIES-AWARE PLANNING BASELINE</Text>
+          <Text style={styles.infoBody}>
+            Prototype water-check baseline {speciesBaseline.waterCheckIntervalDays}d • feed-review baseline {speciesBaseline.feedReviewIntervalDays}d
+          </Text>
+          <Text style={styles.predictionDisclaimer}>{speciesBaseline.note}</Text>
+        </Card>
+      ) : null}
+
+      <SectionTitle title="ADAPTIVE RECOMMENDATIONS" action={intelligence.recommendations.length + " ACTIVE"} />
+      {intelligence.recommendations.map((recommendation) => (
+        <RecommendationCard
+          key={recommendation.id}
+          plant={plant}
+          recommendation={recommendation}
+          onFeedback={onRecommendationFeedback}
+          onApply={onApplyRecommendation}
+        />
+      ))}
 
       <View style={styles.statGrid}>
         <Card style={styles.statCard}>
@@ -824,11 +990,11 @@ function PlantScreen({
 
           <View style={styles.editGrid}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.fieldLabel}>WATER EVERY</Text>
+              <Text style={styles.fieldLabel}>WATER CHECK EVERY</Text>
               <TextInput value={waterInterval} onChangeText={setWaterInterval} keyboardType="number-pad" style={styles.editInput} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.fieldLabel}>FEED EVERY</Text>
+              <Text style={styles.fieldLabel}>FEED REVIEW EVERY</Text>
               <TextInput value={feedInterval} onChangeText={setFeedInterval} keyboardType="number-pad" style={styles.editInput} />
             </View>
           </View>
@@ -849,7 +1015,7 @@ function PlantScreen({
       <SectionTitle title="SCAN HISTORY" action={plant.scanHistory.length + " SAVED"} />
       <Card>
         {plant.scanHistory.length === 0 ? (
-          <Text style={styles.emptyText}>No v0.3 vision records yet. Run a scan with this plant selected as context to begin confidence-aware longitudinal tracking.</Text>
+          <Text style={styles.emptyText}>Add at least two saved scans to enable a meaningful health trend and prediction confidence.</Text>
         ) : (
           plant.scanHistory.slice(0, 6).map((scan) => (
             <View key={scan.id} style={styles.scanHistoryRow}>
@@ -893,56 +1059,90 @@ function PlantScreen({
 
 function CareScreen({
   plants,
-  onCare
+  onCare,
+  onRecommendationFeedback,
+  onApplyRecommendation
 }: {
   plants: Plant[];
   onCare: (plantId: string, action: CareAction) => void;
+  onRecommendationFeedback: (plantId: string, recommendationId: string, value: RecommendationFeedbackValue) => void;
+  onApplyRecommendation: (plantId: string, recommendation: CareRecommendation) => void;
 }) {
   const sorted = [...plants].sort((a, b) => {
-    const aDue = Math.min(daysUntil(a.nextWaterAt), daysUntil(a.nextFeedAt));
-    const bDue = Math.min(daysUntil(b.nextWaterAt), daysUntil(b.nextFeedAt));
-    return aDue - bDue;
+    const aIntel = buildCareIntelligence(a);
+    const bIntel = buildCareIntelligence(b);
+    const riskWeight = { HIGH: 4, ELEVATED: 3, WATCH: 2, LOW: 1 } as const;
+    return riskWeight[bIntel.prediction.risk] - riskWeight[aIntel.prediction.risk];
   });
 
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
-      <DpnHeader eyebrow="SMART CARE ENGINE // LIVE RECORDS" title="Care Command" subtitle="Complete care actions here and PlantPulse immediately writes them into the plant timeline and reschedules the next target." />
-      <SectionTitle title="UPCOMING CARE" />
+      <DpnHeader
+        eyebrow="PLANTPULSE PREDICTION ENGINE // V0.4"
+        title="Adaptive Care Command"
+        subtitle="Care actions, scan trends, predictive risk, and explainable recommendations in one operational queue."
+      />
 
-      {sorted.map((plant) => (
-        <Card key={plant.id} style={styles.careCard}>
-          <View style={styles.careCardTop}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.plantName}>{plant.nickname}</Text>
-              <Text style={styles.plantLatin}>{plant.location} • {plant.commonName}</Text>
-            </View>
-            <View style={styles.careDue}>
-              <Text style={styles.careDueValue}>{careDueLabel(plant.nextWaterAt)}</Text>
-              <Text style={styles.careDueLabel}>WATER</Text>
-            </View>
-            <View style={styles.careDue}>
-              <Text style={styles.careDueValue}>{careDueLabel(plant.nextFeedAt)}</Text>
-              <Text style={styles.careDueLabel}>FEED</Text>
-            </View>
-          </View>
+      {sorted.map((plant) => {
+        const intelligence = buildCareIntelligence(plant);
+        const primaryRecommendation = intelligence.recommendations[0];
 
-          <View style={styles.careActionRow}>
-            <Pressable style={styles.careMiniButton} onPress={() => onCare(plant.id, "water")}>
-              <Text style={styles.careMiniButtonText}>✓ WATERED</Text>
-            </Pressable>
-            <Pressable style={styles.careMiniButton} onPress={() => onCare(plant.id, "fertilize")}>
-              <Text style={styles.careMiniButtonText}>✓ FED</Text>
-            </Pressable>
-            <Pressable style={styles.careMiniButton} onPress={() => onCare(plant.id, "inspect")}>
-              <Text style={styles.careMiniButtonText}>◎ INSPECT</Text>
-            </Pressable>
-          </View>
-        </Card>
-      ))}
+        return (
+          <Card key={plant.id} style={styles.careCard}>
+            <View style={styles.careCardTop}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.plantName}>{plant.nickname}</Text>
+                <Text style={styles.plantLatin}>
+                  {intelligence.trend.direction} • projected {intelligence.prediction.projectedScore}/100
+                </Text>
+              </View>
+              <View style={styles.predictionRiskBox}>
+                <Text style={styles.predictionRisk}>{intelligence.prediction.risk}</Text>
+                <Text style={styles.predictionConfidence}>{intelligence.prediction.confidence}% CONF</Text>
+              </View>
+            </View>
+
+            <View style={styles.careScheduleRow}>
+              <Text style={styles.careScheduleText}>WATER {careDueLabel(plant.nextWaterAt)}</Text>
+              <Text style={styles.careScheduleText}>FEED {careDueLabel(plant.nextFeedAt)}</Text>
+            </View>
+
+            {primaryRecommendation ? (
+              <View style={styles.careRecommendationPreview}>
+                <Text style={styles.recommendationMeta}>{primaryRecommendation.priority} // TOP RECOMMENDATION</Text>
+                <Text style={styles.recommendationTitle}>{primaryRecommendation.title}</Text>
+                <Text style={styles.recommendationDetail}>{primaryRecommendation.detail}</Text>
+                <View style={styles.recommendationActions}>
+                  <Pressable style={styles.feedbackButton} onPress={() => onRecommendationFeedback(plant.id, primaryRecommendation.id, "HELPFUL")}>
+                    <Text style={styles.feedbackButtonText}>HELPFUL</Text>
+                  </Pressable>
+                  {(primaryRecommendation.suggestedWaterIntervalDays !== undefined || primaryRecommendation.suggestedFeedIntervalDays !== undefined) ? (
+                    <Pressable style={styles.applyButton} onPress={() => onApplyRecommendation(plant.id, primaryRecommendation)}>
+                      <Text style={styles.applyButtonText}>APPLY</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              </View>
+            ) : null}
+
+            <View style={styles.careActionRow}>
+              <Pressable style={styles.careMiniButton} onPress={() => onCare(plant.id, "water")}>
+                <Text style={styles.careMiniButtonText}>✓ WATERED</Text>
+              </Pressable>
+              <Pressable style={styles.careMiniButton} onPress={() => onCare(plant.id, "fertilize")}>
+                <Text style={styles.careMiniButtonText}>✓ FED</Text>
+              </Pressable>
+              <Pressable style={styles.careMiniButton} onPress={() => onCare(plant.id, "inspect")}>
+                <Text style={styles.careMiniButtonText}>◎ INSPECT</Text>
+              </Pressable>
+            </View>
+          </Card>
+        );
+      })}
 
       <Card style={styles.infoCard}>
-        <Text style={styles.infoTitle}>V0.2 CARE RECORD ENGINE</Text>
-        <Text style={styles.infoBody}>Care targets are now calendar-based and survive app restarts. Completing watering or feeding writes a timestamped event and schedules the next target from that plant's own editable care interval.</Text>
+        <Text style={styles.infoTitle}>ADVISORY / EXPLAINABLE BY DESIGN</Text>
+        <Text style={styles.infoBody}>PlantPulse v0.4 never treats photo-derived hydration as real soil moisture and never changes a schedule silently. Adaptive changes require an explicit APPLY action and remain visible in the timeline.</Text>
       </Card>
     </ScrollView>
   );
@@ -1168,5 +1368,35 @@ const styles = StyleSheet.create({
   editGrid: { flexDirection: "row", gap: 8 },
   scanHistoryRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 9, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   scanHistoryScore: { color: colors.green, fontSize: 20, fontWeight: "900", minWidth: 34, textAlign: "right" },
-  emptyText: { color: colors.muted, fontSize: 11, lineHeight: 18 }
+  emptyText: { color: colors.muted, fontSize: 11, lineHeight: 18 },
+  predictiveRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  predictionCard: { borderColor: "#275D3A", gap: 10 },
+  predictionHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
+  predictionLabel: { color: colors.muted, fontSize: 8, fontWeight: "900", letterSpacing: 1.1 },
+  projectedScore: { color: colors.green, fontSize: 42, fontWeight: "900", marginTop: 2 },
+  predictionRiskBox: { minWidth: 82, alignItems: "flex-end" },
+  predictionRisk: { color: colors.amber, fontSize: 13, fontWeight: "900", letterSpacing: 0.8 },
+  predictionConfidence: { color: colors.muted, fontSize: 7, fontWeight: "900", marginTop: 3 },
+  trendRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 10 },
+  trendDirection: { color: colors.green, fontSize: 12, fontWeight: "900" },
+  trendMeta: { color: colors.muted, fontSize: 9, fontWeight: "800" },
+  predictionReason: { color: colors.text, fontSize: 10, lineHeight: 16 },
+  predictionDisclaimer: { color: "#64766B", fontSize: 8, lineHeight: 13, marginTop: 4 },
+  speciesBaselineCard: { borderColor: "#314535" },
+  recommendationCard: { gap: 8 },
+  recommendationTop: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  recommendationMeta: { color: colors.green, fontSize: 8, fontWeight: "900", letterSpacing: 0.9 },
+  recommendationTitle: { color: colors.text, fontSize: 15, fontWeight: "900", marginTop: 4 },
+  recommendationConfidence: { color: colors.green, fontSize: 18, fontWeight: "900" },
+  recommendationDetail: { color: colors.muted, fontSize: 11, lineHeight: 18 },
+  recommendationReason: { color: colors.text, fontSize: 9, lineHeight: 15 },
+  recommendationActions: { flexDirection: "row", gap: 7, flexWrap: "wrap", marginTop: 3 },
+  feedbackButton: { minHeight: 34, paddingHorizontal: 10, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, backgroundColor: "#090D0B", alignItems: "center", justifyContent: "center" },
+  feedbackButtonText: { color: colors.muted, fontSize: 8, fontWeight: "900", letterSpacing: 0.7 },
+  applyButton: { minHeight: 34, paddingHorizontal: 12, borderRadius: radius.sm, backgroundColor: colors.green, alignItems: "center", justifyContent: "center" },
+  applyButtonText: { color: "#041108", fontSize: 8, fontWeight: "900", letterSpacing: 0.7 },
+  feedbackState: { color: colors.cyan, fontSize: 8, fontWeight: "900", letterSpacing: 0.8 },
+  careScheduleRow: { flexDirection: "row", gap: 12 },
+  careScheduleText: { color: colors.green, fontSize: 9, fontWeight: "900", letterSpacing: 0.6 },
+  careRecommendationPreview: { gap: 6, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 10 }
 });
