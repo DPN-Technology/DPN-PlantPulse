@@ -1,4 +1,5 @@
 import { daysUntil } from "./care";
+import { getSpeciesCareBaseline } from "./speciesCare";
 import {
   CareIntelligenceSnapshot,
   CareRecommendation,
@@ -138,6 +139,7 @@ export function buildCareRecommendations(plant: Plant): CareRecommendation[] {
   const recent = scans.slice(0, 4);
   const trend = analyzeHealthTrend(plant);
   const prediction = predictPlantHealth(plant);
+  const speciesBaseline = getSpeciesCareBaseline(plant);
   const recommendations: CareRecommendation[] = [];
 
   const hydrationAverage = average(recent.map((scan) => scan.breakdown.hydration));
@@ -145,6 +147,26 @@ export function buildCareRecommendations(plant: Plant): CareRecommendation[] {
   const nutritionAverage = average(recent.map((scan) => scan.breakdown.nutrition));
   const diseasePeak = recent.length ? Math.max(...recent.map((scan) => scan.breakdown.diseaseRisk)) : 0;
   const pestPeak = recent.length ? Math.max(...recent.map((scan) => scan.breakdown.pestRisk)) : 0;
+
+  if (
+    speciesBaseline &&
+    Math.abs(plant.carePlan.waterIntervalDays - speciesBaseline.waterCheckIntervalDays) >= 3
+  ) {
+    recommendations.push(recommendation(
+      "care-species-baseline-review",
+      "care-plan",
+      "Compare schedule with species baseline",
+      "Your current watering-check interval differs materially from the PlantPulse prototype baseline for this species. Review the difference rather than applying it automatically.",
+      [
+        "Current interval: " + plant.carePlan.waterIntervalDays + " days.",
+        "Prototype species baseline: " + speciesBaseline.waterCheckIntervalDays + " days.",
+        speciesBaseline.note
+      ],
+      "LOW",
+      48,
+      { suggestedWaterIntervalDays: speciesBaseline.waterCheckIntervalDays }
+    ));
+  }
 
   if (daysUntil(plant.nextWaterAt) < 0) {
     recommendations.push(recommendation(
