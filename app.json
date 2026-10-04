@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "DPN PlantPulse",
+    "slug": "dpn-plantpulse",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "scheme": "plantpulse",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "technology.dpn.plantpulse",
+      "infoPlist": {
+        "NSCameraUsageDescription": "PlantPulse uses your camera to scan plants and document their health.",
+        "NSPhotoLibraryUsageDescription": "PlantPulse can analyze plant photos you choose from your library."
+      }
+    },
+    "android": {
+      "package": "technology.dpn.plantpulse",
+      "permissions": ["CAMERA"]
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow PlantPulse to analyze plant photos you choose.",
+          "cameraPermission": "Allow PlantPulse to scan plants with your camera."
+        }
+      ]
+    ]
+  }
+}
