@@ -105,11 +105,20 @@ export function updatePlantProfile(plant: Plant, update: PlantProfileUpdate): Pl
     timeline.unshift(event("move", "Moved from " + previousLocation + " to " + update.location.trim(), now));
   }
 
+  const waterScheduleChanged = waterIntervalDays !== plant.carePlan.waterIntervalDays;
+  const feedScheduleChanged = feedIntervalDays !== plant.carePlan.feedIntervalDays;
+
   return {
     ...plant,
     nickname: update.nickname.trim() || plant.nickname,
     location: update.location.trim() || plant.location,
     notes: update.notes?.trim() || undefined,
+    nextWaterAt: waterScheduleChanged
+      ? addDaysIso(plant.lastWateredAt ?? now, waterIntervalDays)
+      : plant.nextWaterAt,
+    nextFeedAt: feedScheduleChanged
+      ? addDaysIso(plant.lastFedAt ?? now, feedIntervalDays)
+      : plant.nextFeedAt,
     carePlan: {
       waterIntervalDays,
       feedIntervalDays
