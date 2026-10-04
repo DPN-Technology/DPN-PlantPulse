@@ -284,7 +284,20 @@ export function buildCareRecommendations(plant: Plant): CareRecommendation[] {
     ));
   }
 
-  return recommendations.sort((a, b) => {
+  const feedbackById = new Map(
+    plant.recommendationFeedback.map((item) => [item.recommendationId, item.value] as const)
+  );
+
+  const learnedRecommendations = recommendations
+    .filter((item) => feedbackById.get(item.id) !== "DISMISSED")
+    .map((item) => {
+      const feedback = feedbackById.get(item.id);
+      if (feedback === "HELPFUL") return { ...item, confidence: clamp(item.confidence + 5) };
+      if (feedback === "NOT_HELPFUL") return { ...item, confidence: clamp(item.confidence - 15) };
+      return item;
+    });
+
+  return learnedRecommendations.sort((a, b) => {
     const weight = { URGENT: 4, HIGH: 3, MEDIUM: 2, LOW: 1 } as const;
     return weight[b.priority] - weight[a.priority] || b.confidence - a.confidence;
   });
