@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "DPN PlantPulse",
+    "slug": "dpn-plantpulse",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "scheme": "plantpulse",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "technology.dpn.plantpulse"
+    },
+    "android": {
+      "package": "technology.dpn.plantpulse",
+      "adaptiveIcon": {
+        "backgroundColor": "#050807"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow DPN PlantPulse to use the camera for plant identification and health scans.",
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow DPN PlantPulse to access plant photos you choose for analysis.",
+          "cameraPermission": "Allow DPN PlantPulse to capture plant photos for analysis.",
+          "microphonePermission": false
+        }
+      ]
+    ]
+  }
+}
