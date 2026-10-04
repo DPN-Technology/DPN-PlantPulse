@@ -49,6 +49,7 @@ export function ScoreBadge({ score, band }: { score: number; band: HealthBand })
 
 export function MetricBar({ label, value, inverse = false }: { label: string; value: number; inverse?: boolean }) {
   const normalized = Math.max(0, Math.min(100, inverse ? 100 - value : value));
+  const fillWidth = (normalized + "%") as `${number}%`;
   return (
     <View style={styles.metricWrap}>
       <View style={styles.metricTop}>
@@ -56,7 +57,7 @@ export function MetricBar({ label, value, inverse = false }: { label: string; va
         <Text style={styles.metricValue}>{value}%</Text>
       </View>
       <View style={styles.track}>
-        <View style={[styles.fill, { width: normalized + "%" }]} />
+        <View style={[styles.fill, { width: fillWidth }]} />
       </View>
     </View>
   );
