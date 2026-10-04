@@ -849,13 +849,13 @@ function PlantScreen({
       <SectionTitle title="SCAN HISTORY" action={plant.scanHistory.length + " SAVED"} />
       <Card>
         {plant.scanHistory.length === 0 ? (
-          <Text style={styles.emptyText}>No v0.2 scan records yet. Run a scan and attach it to this plant to begin the longitudinal health record.</Text>
+          <Text style={styles.emptyText}>No v0.3 vision records yet. Run a scan with this plant selected as context to begin confidence-aware longitudinal tracking.</Text>
         ) : (
           plant.scanHistory.slice(0, 6).map((scan) => (
             <View key={scan.id} style={styles.scanHistoryRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.timelineLabel}>{scan.mode.toUpperCase()} • {scan.commonName}</Text>
-                <Text style={styles.timelineDate}>{new Date(scan.createdAt).toLocaleString()} • confidence {scan.identificationConfidence}%</Text>
+                <Text style={styles.timelineDate}>{new Date(scan.createdAt).toLocaleString()} • {scan.identificationStatus} • confidence {scan.identificationConfidence}% • {scan.engine}</Text>
               </View>
               <Text style={styles.scanHistoryScore}>{scan.healthScore}</Text>
             </View>
