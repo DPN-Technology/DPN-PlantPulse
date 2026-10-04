@@ -1,0 +1,29 @@
+{
+  "name": "dpn-plantpulse",
+  "version": "0.1.0",
+  "private": true,
+  "main": "node_modules/expo/AppEntry.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "doctor": "expo-doctor"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "expo": "~57.0.0",
+    "expo-camera": "~57.0.6",
+    "expo-image-picker": "~57.0.20",
+    "react": "19.2.3",
+    "react-native": "0.86.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}

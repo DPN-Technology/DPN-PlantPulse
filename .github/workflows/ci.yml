@@ -1,0 +1,32 @@
+name: PlantPulse CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plantpulse-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: TypeScript
+        run: npm run typecheck
+      - name: Expo Doctor
+        run: npx expo-doctor
+      - name: Critical dependency audit
+        run: npm audit --audit-level=critical
