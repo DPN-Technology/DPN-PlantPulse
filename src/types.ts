@@ -10,6 +10,11 @@ export type ScanMode =
   | "growth";
 
 export type HealthBand = "EXCELLENT" | "HEALTHY" | "FAIR" | "POOR" | "CRITICAL";
+export type IdentificationStatus = "CONFIDENT" | "REVIEW" | "UNKNOWN";
+export type ConfidenceBand = "HIGH" | "MEDIUM" | "LOW";
+export type FindingCategory = "disease" | "pest" | "hydration" | "light" | "nutrition" | "growth" | "structural";
+export type FindingSeverity = "info" | "watch" | "warning" | "critical";
+export type EvidenceKind = "color" | "shape" | "texture" | "pattern" | "growth" | "capture";
 
 export interface HealthBreakdown {
   leaf: number;
@@ -20,6 +25,45 @@ export interface HealthBreakdown {
   nutrition: number;
 }
 
+export interface SpeciesCandidate {
+  commonName: string;
+  scientificName: string;
+  confidence: number;
+}
+
+export interface VisualEvidence {
+  id: string;
+  kind: EvidenceKind;
+  label: string;
+  detail: string;
+  confidence: number;
+}
+
+export interface ScanFinding {
+  id: string;
+  category: FindingCategory;
+  title: string;
+  summary: string;
+  confidence: number;
+  severity: FindingSeverity;
+  evidenceIds: string[];
+}
+
+export interface CaptureQuality {
+  score: number;
+  issues: string[];
+  guidance: string[];
+}
+
+export interface GrowthComparison {
+  available: boolean;
+  previousScanId?: string;
+  previousScore?: number;
+  scoreDelta?: number;
+  elapsedDays?: number;
+  interpretation: string;
+}
+
 export interface ScanResult {
   id: string;
   createdAt: string;
@@ -28,13 +72,22 @@ export interface ScanResult {
   commonName: string;
   scientificName: string;
   identificationConfidence: number;
+  identificationStatus: IdentificationStatus;
+  confidenceBand: ConfidenceBand;
+  speciesCandidates: SpeciesCandidate[];
   healthScore: number;
   band: HealthBand;
   breakdown: HealthBreakdown;
+  captureQuality: CaptureQuality;
+  evidence: VisualEvidence[];
+  findings: ScanFinding[];
+  growthComparison?: GrowthComparison;
   observations: string[];
   actions: string[];
   toxicity: string;
-  prototype: true;
+  engine: "local-prototype" | "dpn-vision-api";
+  modelVersion: string;
+  prototype: boolean;
 }
 
 export type PlantScan = ScanResult;
