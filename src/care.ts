@@ -1,6 +1,7 @@
 export function addDaysIso(from: Date | string, days: number): string {
   const date = typeof from === "string" ? new Date(from) : new Date(from);
-  date.setDate(date.getDate() + Math.max(0, days));
+  const offset = Number.isFinite(days) ? Math.round(days) : 0;
+  date.setDate(date.getDate() + offset);
   return date.toISOString();
 }
 
