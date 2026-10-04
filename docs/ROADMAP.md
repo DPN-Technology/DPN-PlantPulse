@@ -36,14 +36,22 @@
 - [ ] QR plant tags
 
 ## v0.3 — Vision intelligence
-- [ ] Production species identification adapter
-- [ ] Confidence calibration
-- [ ] Leaf / lesion segmentation
-- [ ] Disease candidate ranking
-- [ ] Pest evidence pipeline
-- [ ] Growth image comparison
-- [ ] Human-readable evidence panel
-- [ ] Unknown / low-confidence handling
+- [x] DPN Vision API client adapter + multipart image transport
+- [x] Confidence bands and identification status thresholds
+- [x] Ranked species candidates
+- [x] Capture-quality contract and rescan guidance
+- [x] Disease candidate ranking contract
+- [x] Pest evidence pipeline contract
+- [x] Growth comparison against saved plant history
+- [x] Human-readable evidence panel
+- [x] Unknown / low-confidence handling
+- [x] Identity protection: uncertain scans cannot overwrite confirmed species/toxicity
+- [x] Provider-independent toxicity safety guard
+- [x] v0.2 → v0.3 scan-history migration
+- [ ] Production-trained species classifier
+- [ ] Production leaf / lesion segmentation model
+- [ ] Calibrated production disease / pest models
+- [ ] Server-side model registry and signed model/version metadata
 
 ## v0.4 — Adaptive care
 - [ ] Species-aware watering model

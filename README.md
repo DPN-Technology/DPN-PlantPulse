@@ -5,7 +5,7 @@
 
 DPN PlantPulse is a mobile-first plant intelligence platform from DPN Technology. The goal is not to create a branded clone of an existing plant identifier. PlantPulse is designed around a DPN-specific idea: every plant becomes a continuously monitored biological asset with an evolving health record.
 
-## v0.2 mobile data foundation
+## v0.3 vision intelligence foundation
 
 The repository now contains a runnable Expo / React Native application foundation for iOS, Android, and web.
 
@@ -23,13 +23,21 @@ The repository now contains a runnable Expo / React Native application foundatio
 - My Plants collection
 - plant profile + history timeline
 - Care Command queue
-- versioned local persistence with automatic v0.1 → v0.2 migration
+- versioned local persistence with automatic v0.1 → v0.2 → v0.3 migration
 - persistent per-plant scan history
 - repeat scans can update an existing plant
 - real care actions with timestamped timeline writes
 - calendar-based watering and feeding schedules
 - editable plant name, room/location, care intervals, and notes
 - replaceable Plant Intelligence service contract
+- DPN Vision API multipart adapter
+- confidence bands + CONFIDENT / REVIEW / UNKNOWN states
+- ranked species candidates
+- capture-quality scoring contract + rescan guidance
+- ranked disease/pest/stress findings
+- explainable evidence channels
+- growth comparison against saved scan history
+- uncertain scans cannot overwrite confirmed plant identity
 - PlantPulse AI rule-based prototype
 - CI validation
 - CodeQL JavaScript/TypeScript scanning
@@ -37,11 +45,11 @@ The repository now contains a runnable Expo / React Native application foundatio
 
 ## Important prototype boundary
 
-The camera workflow is real, but **v0.1 does not claim to contain a production botanical computer-vision model**.
+The camera workflow and v0.3 vision contract are real, but **v0.3 still does not ship a production-trained botanical computer-vision model**.
 
 The current analysis adapter intentionally generates deterministic local prototype results. This lets us build, test, and refine the complete mobile experience before connecting the DPN Plant Intelligence backend.
 
-Do not rely on v0.1 prototype results for ingestion, pet safety, toxicity, diagnosis, pesticide use, or treatment decisions.
+Do not rely on local prototype results for ingestion, pet safety, toxicity, diagnosis, pesticide use, or treatment decisions. The production DPN Vision backend is an adapter target, not a claimed completed model.
 
 ## Run it
 
@@ -94,7 +102,7 @@ The production score is planned to combine scan evidence, care history, environm
 
 ## Architecture
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DATA_MODEL.md](docs/DATA_MODEL.md).
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/DATA_MODEL.md](docs/DATA_MODEL.md), and [docs/VISION_API.md](docs/VISION_API.md).
 
 ## Roadmap
 
