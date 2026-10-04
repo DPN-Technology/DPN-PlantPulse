@@ -5,7 +5,7 @@
 
 DPN PlantPulse is a mobile-first plant intelligence platform from DPN Technology. The goal is not to create a branded clone of an existing plant identifier. PlantPulse is designed around a DPN-specific idea: every plant becomes a continuously monitored biological asset with an evolving health record.
 
-## v0.3 vision intelligence foundation
+## v0.4 adaptive care intelligence foundation
 
 The repository now contains a runnable Expo / React Native application foundation for iOS, Android, and web.
 
@@ -23,7 +23,7 @@ The repository now contains a runnable Expo / React Native application foundatio
 - My Plants collection
 - plant profile + history timeline
 - Care Command queue
-- versioned local persistence with automatic v0.1 → v0.2 → v0.3 migration
+- versioned local persistence with automatic v0.1 → v0.2 → v0.3 → v0.4 migration
 - persistent per-plant scan history
 - repeat scans can update an existing plant
 - real care actions with timestamped timeline writes
@@ -38,6 +38,15 @@ The repository now contains a runnable Expo / React Native application foundatio
 - explainable evidence channels
 - growth comparison against saved scan history
 - uncertain scans cannot overwrite confirmed plant identity
+- 7-day PlantPulse prediction engine
+- confidence-scored health trend analytics
+- predictive watchlist for elevated-risk plants
+- explainable adaptive care recommendations
+- prototype species-aware care baselines
+- persistent Helpful / Not Helpful / Dismiss feedback
+- feedback-aware recommendation ranking
+- explicit Apply action for suggested interval changes
+- adaptive changes recorded in the plant timeline
 - PlantPulse AI rule-based prototype
 - CI validation
 - CodeQL JavaScript/TypeScript scanning
@@ -45,7 +54,7 @@ The repository now contains a runnable Expo / React Native application foundatio
 
 ## Important prototype boundary
 
-The camera workflow and v0.3 vision contract are real, but **v0.3 still does not ship a production-trained botanical computer-vision model**.
+The camera workflow, v0.3 vision contract, and v0.4 adaptive-care engine are real, but **PlantPulse still does not ship a production-trained botanical computer-vision or calibrated prediction model**.
 
 The current analysis adapter intentionally generates deterministic local prototype results. This lets us build, test, and refine the complete mobile experience before connecting the DPN Plant Intelligence backend.
 
@@ -102,7 +111,7 @@ The production score is planned to combine scan evidence, care history, environm
 
 ## Architecture
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/DATA_MODEL.md](docs/DATA_MODEL.md), and [docs/VISION_API.md](docs/VISION_API.md).
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/DATA_MODEL.md](docs/DATA_MODEL.md), [docs/VISION_API.md](docs/VISION_API.md), and [docs/ADAPTIVE_CARE.md](docs/ADAPTIVE_CARE.md).
 
 ## Roadmap
 
