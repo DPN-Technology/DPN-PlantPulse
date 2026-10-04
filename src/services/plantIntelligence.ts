@@ -12,10 +12,19 @@ export interface PlantIntelligenceClient {
   analyze(request: AnalyzeScanRequest): Promise<ScanResult>;
 }
 
+function applySafetyGuard(result: ScanResult): ScanResult {
+  if (result.identificationStatus === "CONFIDENT") return result;
+
+  return {
+    ...result,
+    toxicity: "Identification is not confident enough for toxicity decisions. Do not rely on this scan for ingestion or pet/child safety guidance."
+  };
+}
+
 export class LocalPrototypePlantIntelligenceClient implements PlantIntelligenceClient {
   async analyze(request: AnalyzeScanRequest): Promise<ScanResult> {
     await new Promise((resolve) => setTimeout(resolve, 650));
-    return analyzePrototypeScan(request.imageUri, request.mode, request.previousScan);
+    return applySafetyGuard(analyzePrototypeScan(request.imageUri, request.mode, request.previousScan));
   }
 }
 
@@ -72,11 +81,11 @@ export class DpnVisionApiClient implements PlantIntelligenceClient {
         throw new Error("DPN Vision API returned an invalid scan payload");
       }
 
-      return {
+      return applySafetyGuard({
         ...result,
         engine: "dpn-vision-api",
         prototype: false
-      };
+      });
     } finally {
       clearTimeout(timer);
     }
