@@ -1,6 +1,6 @@
 # DPN PlantPulse Architecture
 
-## v0.1 mobile foundation
+## v0.3 mobile + vision foundation
 
 The first build deliberately separates the mobile workflow from the future production inference services.
 
@@ -15,9 +15,18 @@ Expo / React Native Mobile Client
         +-- Plant timeline
         +-- Local prototype assistant
         |
-        +-- Prototype analysis adapter
+        +-- PlantIntelligenceClient
                 |
-                +-- deterministic local result generator
+                +-- LocalPrototypePlantIntelligenceClient
+                |      +-- confidence / unknown-state simulator
+                |      +-- evidence / ranked finding simulator
+                |      +-- historical score comparison
+                |
+                +-- DpnVisionApiClient
+                       +-- multipart image upload
+                       +-- authenticated API option
+                       +-- timeout + payload validation
+                       +-- provider-independent safety guard
 ```
 
 The prototype adapter exists so the full UX can be built and tested without pretending an unfinished image model is production-ready.
@@ -94,3 +103,29 @@ Plant identification and disease inference are probabilistic. The production UI 
 ## Privacy direction
 
 Plant photos should have explicit upload semantics, user-visible retention controls, deletion support, and metadata minimization. EXIF location data should not be uploaded by default unless a location-aware feature explicitly requires it and the user has consented.
+
+
+## v0.3 vision result contract
+
+Every analysis result carries more than a label:
+
+- identification status: `CONFIDENT`, `REVIEW`, or `UNKNOWN`
+- calibrated confidence band
+- ranked species candidates
+- capture-quality score, issues, and rescan guidance
+- health telemetry
+- ranked findings for disease, pest, hydration, light, nutrition, growth, or structure
+- human-readable visual evidence references
+- optional historical comparison
+- engine provenance and model version
+- explicit prototype flag
+
+Uncertain results are treated as first-class states. The app does not silently convert a low-confidence candidate into a confirmed species.
+
+## Identity protection
+
+When a scan is attached to an existing plant, species and toxicity fields are refreshed only when the new result is `CONFIDENT`. REVIEW and UNKNOWN scans may still update current health score, image, and history, but cannot replace an already confirmed identity.
+
+## Provider safety boundary
+
+The mobile client applies a final uncertainty guard after either the local prototype provider or a remote DPN Vision API provider returns. If identification is not `CONFIDENT`, toxicity guidance is replaced with a non-reliance warning before the result reaches the UI.
