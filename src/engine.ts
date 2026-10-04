@@ -42,7 +42,7 @@ export function scoreBand(score: number): HealthBand {
 
 export function analyzePrototypeScan(imageUri: string, mode: ScanMode): ScanResult {
   const seed = hashString(imageUri + mode);
-  const candidate = candidates[seed % candidates.length] ?? candidates[0];
+  const candidate = candidates[seed % candidates.length] ?? candidates[0]!;
   const healthScore = 68 + (seed % 29);
   const leaf = Math.min(99, healthScore + 2);
   const hydration = 62 + ((seed >> 3) % 35);
