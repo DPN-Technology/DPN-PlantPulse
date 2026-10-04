@@ -1,5 +1,13 @@
 import { addDaysIso, clampInterval } from "./care";
-import { CareAction, Plant, PlantProfileUpdate, ScanResult, TimelineEvent } from "./types";
+import {
+  CareAction,
+  CareRecommendation,
+  Plant,
+  PlantProfileUpdate,
+  RecommendationFeedbackValue,
+  ScanResult,
+  TimelineEvent
+} from "./types";
 
 function event(type: TimelineEvent["type"], label: string, at = new Date().toISOString()): TimelineEvent {
   return {
@@ -33,7 +41,8 @@ export function createPlantFromScan(result: ScanResult): Plant {
     scanHistory: [result],
     timeline: [
       event("scan", "PlantPulse scan — " + result.healthScore + "/100", result.createdAt)
-    ]
+    ],
+    recommendationFeedback: []
   };
 }
 
@@ -131,4 +140,64 @@ export function updatePlantProfile(plant: Plant, update: PlantProfileUpdate): Pl
     },
     timeline: timeline.slice(0, 250)
   };
+}
+
+
+export function recordRecommendationFeedback(
+  plant: Plant,
+  recommendationId: string,
+  value: RecommendationFeedbackValue
+): Plant {
+  const feedback = {
+    recommendationId,
+    value,
+    at: new Date().toISOString()
+  };
+
+  return {
+    ...plant,
+    recommendationFeedback: [
+      feedback,
+      ...plant.recommendationFeedback.filter((item) => item.recommendationId !== recommendationId)
+    ].slice(0, 100)
+  };
+}
+
+export function applyCareRecommendation(plant: Plant, recommendation: CareRecommendation): Plant {
+  const now = new Date().toISOString();
+  const waterIntervalDays = recommendation.suggestedWaterIntervalDays ?? plant.carePlan.waterIntervalDays;
+  const feedIntervalDays = recommendation.suggestedFeedIntervalDays ?? plant.carePlan.feedIntervalDays;
+  const changedWater = waterIntervalDays !== plant.carePlan.waterIntervalDays;
+  const changedFeed = feedIntervalDays !== plant.carePlan.feedIntervalDays;
+
+  if (!changedWater && !changedFeed) {
+    return recordRecommendationFeedback(plant, recommendation.id, "APPLIED");
+  }
+
+  const nextPlant: Plant = {
+    ...plant,
+    carePlan: {
+      waterIntervalDays: clampInterval(waterIntervalDays, plant.carePlan.waterIntervalDays),
+      feedIntervalDays: clampInterval(feedIntervalDays, plant.carePlan.feedIntervalDays)
+    },
+    nextWaterAt: changedWater
+      ? addDaysIso(plant.lastWateredAt ?? now, waterIntervalDays)
+      : plant.nextWaterAt,
+    nextFeedAt: changedFeed
+      ? addDaysIso(plant.lastFedAt ?? now, feedIntervalDays)
+      : plant.nextFeedAt,
+    timeline: [
+      event(
+        "note",
+        "Adaptive care applied • " +
+          (changedWater ? "water interval " + waterIntervalDays + "d" : "") +
+          (changedWater && changedFeed ? " • " : "") +
+          (changedFeed ? "feed interval " + feedIntervalDays + "d" : ""),
+        now
+      ),
+      ...plant.timeline
+    ].slice(0, 250)
+  };
+
+  return recordRecommendationFeedback(nextPlant, recommendation.id, "APPLIED");
 }
