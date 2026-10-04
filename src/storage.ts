@@ -117,7 +117,8 @@ function normalizePlant(raw: LegacyPlant): Plant {
     toxicity: raw.toxicity,
     notes: raw.notes,
     scanHistory,
-    timeline: Array.isArray(raw.timeline) ? raw.timeline : []
+    timeline: Array.isArray(raw.timeline) ? raw.timeline : [],
+    recommendationFeedback: Array.isArray(raw.recommendationFeedback) ? raw.recommendationFeedback : []
   };
 }
 
