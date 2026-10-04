@@ -16,11 +16,14 @@ import {
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import { BottomNav, Card, DpnHeader, MetricBar, Pill, ScoreBadge } from "./src/components";
+import { careDueLabel, daysUntil } from "./src/care";
 import { seedPlants } from "./src/data";
-import { analyzePrototypeScan, scoreBand } from "./src/engine";
+import { scoreBand } from "./src/engine";
+import { attachScanToPlant, completeCareAction, createPlantFromScan, updatePlantProfile } from "./src/plantService";
+import { plantIntelligenceClient } from "./src/services/plantIntelligence";
 import { loadPlants, savePlants } from "./src/storage";
 import { colors, radius } from "./src/theme";
-import { Plant, ScanMode, ScanResult, Screen } from "./src/types";
+import { CareAction, Plant, PlantProfileUpdate, ScanMode, ScanResult, Screen } from "./src/types";
 
 const modes: Array<{ key: ScanMode; label: string }> = [
   { key: "identify", label: "IDENTIFY" },
@@ -91,48 +94,51 @@ export default function App() {
     setScreen(next);
   };
 
-  const runAnalysis = (uri: string) => {
+  const runAnalysis = async (uri: string) => {
     setAnalyzing(true);
-    setTimeout(() => {
-      const result = analyzePrototypeScan(uri, scanMode);
+    try {
+      const result = await plantIntelligenceClient.analyze({ imageUri: uri, mode: scanMode });
       setScanResult(result);
-      setAnalyzing(false);
       setScreen("result");
-    }, 850);
+    } catch {
+      Alert.alert("Analysis error", "PlantPulse could not complete this scan.");
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const updatePlantRecord = (id: string, updater: (plant: Plant) => Plant) => {
+    setPlants((current) => current.map((plant) => (plant.id === id ? updater(plant) : plant)));
   };
 
   const saveScanAsPlant = () => {
     if (!scanResult) return;
-    const now = new Date().toISOString();
-    const plant: Plant = {
-      id: "plant-" + Date.now(),
-      nickname: scanResult.commonName,
-      commonName: scanResult.commonName,
-      scientificName: scanResult.scientificName,
-      location: "Unassigned",
-      healthScore: scanResult.healthScore,
-      imageUri: scanResult.imageUri,
-      lastScanAt: now,
-      nextWaterDays: scanResult.breakdown.hydration < 75 ? 1 : 3,
-      nextFeedDays: scanResult.breakdown.nutrition < 70 ? 7 : 14,
-      toxicity: scanResult.toxicity,
-      timeline: [
-        {
-          id: "event-" + Date.now(),
-          type: "scan",
-          label: "PlantPulse scan — " + scanResult.healthScore + "/100",
-          at: now
-        }
-      ]
-    };
+    const plant = createPlantFromScan(scanResult);
     setPlants((current) => [plant, ...current]);
     setSelectedPlantId(plant.id);
+    setCapturedUri(null);
     setScreen("plant");
+  };
+
+  const applyScanToExisting = (plantId: string) => {
+    if (!scanResult) return;
+    updatePlantRecord(plantId, (plant) => attachScanToPlant(plant, scanResult));
+    setSelectedPlantId(plantId);
+    setCapturedUri(null);
+    setScreen("plant");
+  };
+
+  const recordCare = (plantId: string, action: CareAction) => {
+    updatePlantRecord(plantId, (plant) => completeCareAction(plant, action));
+  };
+
+  const savePlantProfile = (plantId: string, update: PlantProfileUpdate) => {
+    updatePlantRecord(plantId, (plant) => updatePlantProfile(plant, update));
   };
 
   const averageScore = Math.round(plants.reduce((sum, plant) => sum + plant.healthScore, 0) / Math.max(1, plants.length));
   const attention = plants.filter((plant) => plant.healthScore < 75);
-  const dueCare = plants.filter((plant) => plant.nextWaterDays <= 1 || plant.nextFeedDays <= 1);
+  const dueCare = plants.filter((plant) => daysUntil(plant.nextWaterAt) <= 1 || daysUntil(plant.nextFeedAt) <= 1);
 
   const renderScreen = () => {
     if (screen === "scan") {
@@ -149,7 +155,15 @@ export default function App() {
     }
 
     if (screen === "result" && scanResult) {
-      return <ResultScreen result={scanResult} onSave={saveScanAsPlant} onRescan={() => setScreen("scan")} />;
+      return (
+        <ResultScreen
+          result={scanResult}
+          plants={plants}
+          onSave={saveScanAsPlant}
+          onApplyToPlant={applyScanToExisting}
+          onRescan={() => setScreen("scan")}
+        />
+      );
     }
 
     if (screen === "collection") {
@@ -157,11 +171,18 @@ export default function App() {
     }
 
     if (screen === "plant" && selectedPlant) {
-      return <PlantScreen plant={selectedPlant} onBack={() => setScreen("collection")} />;
+      return (
+        <PlantScreen
+          plant={selectedPlant}
+          onBack={() => setScreen("collection")}
+          onCare={recordCare}
+          onUpdate={savePlantProfile}
+        />
+      );
     }
 
     if (screen === "care") {
-      return <CareScreen plants={plants} />;
+      return <CareScreen plants={plants} onCare={recordCare} />;
     }
 
     if (screen === "ai") {
@@ -421,7 +442,19 @@ function ScanScreen({
   );
 }
 
-function ResultScreen({ result, onSave, onRescan }: { result: ScanResult; onSave: () => void; onRescan: () => void }) {
+function ResultScreen({
+  result,
+  plants,
+  onSave,
+  onApplyToPlant,
+  onRescan
+}: {
+  result: ScanResult;
+  plants: Plant[];
+  onSave: () => void;
+  onApplyToPlant: (plantId: string) => void;
+  onRescan: () => void;
+}) {
   return (
     <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
       <View style={styles.resultTop}>
@@ -481,9 +514,27 @@ function ResultScreen({ result, onSave, onRescan }: { result: ScanResult; onSave
       </Card>
 
       <View style={styles.buttonStack}>
-        <PrimaryButton label="SAVE TO MY PLANTS" onPress={onSave} />
+        <PrimaryButton label="SAVE AS NEW PLANT" onPress={onSave} />
         <SecondaryButton label="SCAN AGAIN" onPress={onRescan} />
       </View>
+
+      {plants.length > 0 ? (
+        <>
+          <SectionTitle title="UPDATE EXISTING PLANT" />
+          <Card>
+            <Text style={styles.infoBody}>Attach this scan to an existing plant to update its health score, image, and longitudinal scan history.</Text>
+            {plants.slice(0, 6).map((plant) => (
+              <Pressable key={plant.id} style={styles.existingPlantRow} onPress={() => onApplyToPlant(plant.id)}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.plantName}>{plant.nickname}</Text>
+                  <Text style={styles.plantLatin}>{plant.location} • {plant.scientificName}</Text>
+                </View>
+                <Text style={styles.existingPlantScore}>{plant.healthScore} → {result.healthScore}</Text>
+              </Pressable>
+            ))}
+          </Card>
+        </>
+      ) : null}
     </ScrollView>
   );
 }
@@ -520,7 +571,49 @@ function CollectionScreen({ plants, onOpen }: { plants: Plant[]; onOpen: (id: st
   );
 }
 
-function PlantScreen({ plant, onBack }: { plant: Plant; onBack: () => void }) {
+function PlantScreen({
+  plant,
+  onBack,
+  onCare,
+  onUpdate
+}: {
+  plant: Plant;
+  onBack: () => void;
+  onCare: (plantId: string, action: CareAction) => void;
+  onUpdate: (plantId: string, update: PlantProfileUpdate) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [nickname, setNickname] = useState(plant.nickname);
+  const [location, setLocation] = useState(plant.location);
+  const [waterInterval, setWaterInterval] = useState(String(plant.carePlan.waterIntervalDays));
+  const [feedInterval, setFeedInterval] = useState(String(plant.carePlan.feedIntervalDays));
+  const [notes, setNotes] = useState(plant.notes ?? "");
+
+  useEffect(() => {
+    setNickname(plant.nickname);
+    setLocation(plant.location);
+    setWaterInterval(String(plant.carePlan.waterIntervalDays));
+    setFeedInterval(String(plant.carePlan.feedIntervalDays));
+    setNotes(plant.notes ?? "");
+  }, [plant.id, plant.nickname, plant.location, plant.carePlan.waterIntervalDays, plant.carePlan.feedIntervalDays, plant.notes]);
+
+  const saveProfile = () => {
+    const waterDays = Number(waterInterval);
+    const feedDays = Number(feedInterval);
+    if (!Number.isFinite(waterDays) || waterDays < 1 || !Number.isFinite(feedDays) || feedDays < 1) {
+      Alert.alert("Invalid care interval", "Water and feed intervals must be at least 1 day.");
+      return;
+    }
+    onUpdate(plant.id, {
+      nickname,
+      location,
+      waterIntervalDays: waterDays,
+      feedIntervalDays: feedDays,
+      notes
+    });
+    setEditing(false);
+  };
+
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
       <Pressable onPress={onBack}><Text style={styles.back}>← PLANT NETWORK</Text></Pressable>
@@ -537,16 +630,89 @@ function PlantScreen({ plant, onBack }: { plant: Plant; onBack: () => void }) {
 
       <View style={styles.statGrid}>
         <Card style={styles.statCard}>
-          <Text style={styles.statLabel}>WATER</Text>
-          <Text style={styles.statValue}>{plant.nextWaterDays}</Text>
-          <Text style={styles.statMeta}>DAYS</Text>
+          <Text style={styles.statLabel}>NEXT WATER</Text>
+          <Text style={styles.statValue}>{Math.max(0, daysUntil(plant.nextWaterAt))}</Text>
+          <Text style={styles.statMeta}>{careDueLabel(plant.nextWaterAt)}</Text>
         </Card>
         <Card style={styles.statCard}>
-          <Text style={styles.statLabel}>FEED</Text>
-          <Text style={styles.statValue}>{plant.nextFeedDays}</Text>
-          <Text style={styles.statMeta}>DAYS</Text>
+          <Text style={styles.statLabel}>NEXT FEED</Text>
+          <Text style={styles.statValue}>{Math.max(0, daysUntil(plant.nextFeedAt))}</Text>
+          <Text style={styles.statMeta}>{careDueLabel(plant.nextFeedAt)}</Text>
+        </Card>
+        <Card style={styles.statCard}>
+          <Text style={styles.statLabel}>SCANS</Text>
+          <Text style={styles.statValue}>{plant.scanHistory.length}</Text>
+          <Text style={styles.statMeta}>HISTORY</Text>
         </Card>
       </View>
+
+      <SectionTitle title="CARE ACTIONS" />
+      <View style={styles.quickActionGrid}>
+        {([
+          ["water", "WATERED", "⌁"],
+          ["fertilize", "FED", "✦"],
+          ["inspect", "INSPECTED", "◎"],
+          ["prune", "PRUNED", "✂"]
+        ] as const).map(([action, label, icon]) => (
+          <Pressable key={action} style={styles.quickAction} onPress={() => onCare(plant.id, action)}>
+            <Text style={styles.quickActionIcon}>{icon}</Text>
+            <Text style={styles.quickActionText}>{label}</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <View style={styles.profileActions}>
+        <SecondaryButton label={editing ? "CANCEL EDIT" : "EDIT PROFILE / LOCATION"} onPress={() => setEditing((value) => !value)} />
+      </View>
+
+      {editing ? (
+        <Card style={styles.editCard}>
+          <Text style={styles.fieldLabel}>PLANT NAME</Text>
+          <TextInput value={nickname} onChangeText={setNickname} style={styles.editInput} placeholderTextColor="#637268" />
+
+          <Text style={styles.fieldLabel}>ROOM / LOCATION</Text>
+          <TextInput value={location} onChangeText={setLocation} style={styles.editInput} placeholder="Living Room" placeholderTextColor="#637268" />
+
+          <View style={styles.editGrid}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fieldLabel}>WATER EVERY</Text>
+              <TextInput value={waterInterval} onChangeText={setWaterInterval} keyboardType="number-pad" style={styles.editInput} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fieldLabel}>FEED EVERY</Text>
+              <TextInput value={feedInterval} onChangeText={setFeedInterval} keyboardType="number-pad" style={styles.editInput} />
+            </View>
+          </View>
+
+          <Text style={styles.fieldLabel}>NOTES</Text>
+          <TextInput
+            value={notes}
+            onChangeText={setNotes}
+            multiline
+            style={[styles.editInput, styles.editArea]}
+            placeholder="Growth notes, placement, potting mix..."
+            placeholderTextColor="#637268"
+          />
+          <PrimaryButton label="SAVE PLANT PROFILE" onPress={saveProfile} />
+        </Card>
+      ) : null}
+
+      <SectionTitle title="SCAN HISTORY" action={plant.scanHistory.length + " SAVED"} />
+      <Card>
+        {plant.scanHistory.length === 0 ? (
+          <Text style={styles.emptyText}>No v0.2 scan records yet. Run a scan and attach it to this plant to begin the longitudinal health record.</Text>
+        ) : (
+          plant.scanHistory.slice(0, 6).map((scan) => (
+            <View key={scan.id} style={styles.scanHistoryRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.timelineLabel}>{scan.mode.toUpperCase()} • {scan.commonName}</Text>
+                <Text style={styles.timelineDate}>{new Date(scan.createdAt).toLocaleString()} • confidence {scan.identificationConfidence}%</Text>
+              </View>
+              <Text style={styles.scanHistoryScore}>{scan.healthScore}</Text>
+            </View>
+          ))
+        )}
+      </Card>
 
       <SectionTitle title="PLANT TIMELINE" />
       <Card>
@@ -561,6 +727,13 @@ function PlantScreen({ plant, onBack }: { plant: Plant; onBack: () => void }) {
         ))}
       </Card>
 
+      {plant.notes ? (
+        <>
+          <SectionTitle title="PLANT NOTES" />
+          <Card><Text style={styles.bulletText}>{plant.notes}</Text></Card>
+        </>
+      ) : null}
+
       <SectionTitle title="TOXICITY PROFILE" />
       <Card style={styles.warningCard}>
         <Text style={styles.warningText}>{plant.toxicity}</Text>
@@ -569,31 +742,58 @@ function PlantScreen({ plant, onBack }: { plant: Plant; onBack: () => void }) {
   );
 }
 
-function CareScreen({ plants }: { plants: Plant[] }) {
-  const sorted = [...plants].sort((a, b) => a.nextWaterDays - b.nextWaterDays);
+function CareScreen({
+  plants,
+  onCare
+}: {
+  plants: Plant[];
+  onCare: (plantId: string, action: CareAction) => void;
+}) {
+  const sorted = [...plants].sort((a, b) => {
+    const aDue = Math.min(daysUntil(a.nextWaterAt), daysUntil(a.nextFeedAt));
+    const bDue = Math.min(daysUntil(b.nextWaterAt), daysUntil(b.nextFeedAt));
+    return aDue - bDue;
+  });
+
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
-      <DpnHeader eyebrow="SMART CARE ENGINE" title="Care Command" subtitle="A single queue for watering, feeding, inspections, and future adaptive schedules." />
+      <DpnHeader eyebrow="SMART CARE ENGINE // LIVE RECORDS" title="Care Command" subtitle="Complete care actions here and PlantPulse immediately writes them into the plant timeline and reschedules the next target." />
       <SectionTitle title="UPCOMING CARE" />
+
       {sorted.map((plant) => (
         <Card key={plant.id} style={styles.careCard}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.plantName}>{plant.nickname}</Text>
-            <Text style={styles.plantLatin}>{plant.location}</Text>
+          <View style={styles.careCardTop}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.plantName}>{plant.nickname}</Text>
+              <Text style={styles.plantLatin}>{plant.location} • {plant.commonName}</Text>
+            </View>
+            <View style={styles.careDue}>
+              <Text style={styles.careDueValue}>{careDueLabel(plant.nextWaterAt)}</Text>
+              <Text style={styles.careDueLabel}>WATER</Text>
+            </View>
+            <View style={styles.careDue}>
+              <Text style={styles.careDueValue}>{careDueLabel(plant.nextFeedAt)}</Text>
+              <Text style={styles.careDueLabel}>FEED</Text>
+            </View>
           </View>
-          <View style={styles.careDue}>
-            <Text style={styles.careDueValue}>{plant.nextWaterDays === 0 ? "TODAY" : plant.nextWaterDays + "D"}</Text>
-            <Text style={styles.careDueLabel}>WATER</Text>
-          </View>
-          <View style={styles.careDue}>
-            <Text style={styles.careDueValue}>{plant.nextFeedDays + "D"}</Text>
-            <Text style={styles.careDueLabel}>FEED</Text>
+
+          <View style={styles.careActionRow}>
+            <Pressable style={styles.careMiniButton} onPress={() => onCare(plant.id, "water")}>
+              <Text style={styles.careMiniButtonText}>✓ WATERED</Text>
+            </Pressable>
+            <Pressable style={styles.careMiniButton} onPress={() => onCare(plant.id, "fertilize")}>
+              <Text style={styles.careMiniButtonText}>✓ FED</Text>
+            </Pressable>
+            <Pressable style={styles.careMiniButton} onPress={() => onCare(plant.id, "inspect")}>
+              <Text style={styles.careMiniButtonText}>◎ INSPECT</Text>
+            </Pressable>
           </View>
         </Card>
       ))}
+
       <Card style={styles.infoCard}>
-        <Text style={styles.infoTitle}>ADAPTIVE CARE ROADMAP</Text>
-        <Text style={styles.infoBody}>Future scheduling will combine species requirements, scan history, user confirmations, weather context, and optional sensor telemetry instead of relying on fixed calendar reminders alone.</Text>
+        <Text style={styles.infoTitle}>V0.2 CARE RECORD ENGINE</Text>
+        <Text style={styles.infoBody}>Care targets are now calendar-based and survive app restarts. Completing watering or feeding writes a timestamped event and schedules the next target from that plant's own editable care interval.</Text>
       </Card>
     </ScrollView>
   );
@@ -759,10 +959,14 @@ const styles = StyleSheet.create({
   timelineDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.green, marginTop: 4 },
   timelineLabel: { color: colors.text, fontSize: 12, fontWeight: "800" },
   timelineDate: { color: colors.muted, fontSize: 10, marginTop: 3 },
-  careCard: { flexDirection: "row", alignItems: "center", gap: 14 },
-  careDue: { alignItems: "center", minWidth: 52 },
-  careDueValue: { color: colors.green, fontWeight: "900", fontSize: 15 },
+  careCard: { gap: 12 },
+  careCardTop: { flexDirection: "row", alignItems: "center", gap: 12 },
+  careDue: { alignItems: "center", minWidth: 64 },
+  careDueValue: { color: colors.green, fontWeight: "900", fontSize: 12, textAlign: "center" },
   careDueLabel: { color: colors.muted, fontWeight: "900", fontSize: 7, letterSpacing: 1 },
+  careActionRow: { flexDirection: "row", gap: 7, flexWrap: "wrap" },
+  careMiniButton: { flexGrow: 1, minHeight: 38, paddingHorizontal: 10, borderRadius: radius.sm, borderWidth: 1, borderColor: "#275D3A", backgroundColor: "#0A1710", alignItems: "center", justifyContent: "center" },
+  careMiniButtonText: { color: colors.green, fontSize: 8, fontWeight: "900", letterSpacing: 0.8 },
   infoCard: { marginTop: 8, borderColor: "#274A36" },
   infoTitle: { color: colors.green, fontSize: 11, fontWeight: "900", letterSpacing: 1 },
   infoBody: { color: colors.muted, fontSize: 11, lineHeight: 18, marginTop: 8 },
@@ -776,5 +980,20 @@ const styles = StyleSheet.create({
   chatInputRow: { flexDirection: "row", gap: 8, marginTop: 12 },
   chatInput: { flex: 1, minHeight: 50, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel, color: colors.text, paddingHorizontal: 14 },
   sendButton: { width: 50, height: 50, borderRadius: 16, backgroundColor: colors.green, alignItems: "center", justifyContent: "center" },
-  sendButtonText: { color: "#041108", fontSize: 22, fontWeight: "900" }
+  sendButtonText: { color: "#041108", fontSize: 22, fontWeight: "900" },
+  existingPlantRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  existingPlantScore: { color: colors.green, fontSize: 12, fontWeight: "900" },
+  quickActionGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  quickAction: { width: "48%", minHeight: 64, borderRadius: radius.md, borderWidth: 1, borderColor: "#275D3A", backgroundColor: "#0A1710", alignItems: "center", justifyContent: "center", gap: 4 },
+  quickActionIcon: { color: colors.green, fontSize: 18, fontWeight: "900" },
+  quickActionText: { color: colors.text, fontSize: 9, fontWeight: "900", letterSpacing: 0.9 },
+  profileActions: { flexDirection: "row" },
+  editCard: { gap: 9 },
+  fieldLabel: { color: colors.green, fontSize: 8, fontWeight: "900", letterSpacing: 1.1, marginTop: 2 },
+  editInput: { minHeight: 46, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, backgroundColor: "#080D0A", color: colors.text, paddingHorizontal: 12, paddingVertical: 10 },
+  editArea: { minHeight: 90, textAlignVertical: "top" },
+  editGrid: { flexDirection: "row", gap: 8 },
+  scanHistoryRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 9, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  scanHistoryScore: { color: colors.green, fontSize: 20, fontWeight: "900", minWidth: 34, textAlign: "right" },
+  emptyText: { color: colors.muted, fontSize: 11, lineHeight: 18 }
 });
