@@ -65,6 +65,7 @@ export default function App() {
   const [plants, setPlants] = useState<Plant[]>(seedPlants);
   const [selectedPlantId, setSelectedPlantId] = useState<string | null>(null);
   const [scanMode, setScanMode] = useState<ScanMode>("health");
+  const [scanTargetPlantId, setScanTargetPlantId] = useState<string | null>(null);
   const [capturedUri, setCapturedUri] = useState<string | null>(null);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
@@ -95,9 +96,22 @@ export default function App() {
   };
 
   const runAnalysis = async (uri: string) => {
+    const targetPlant = plants.find((plant) => plant.id === scanTargetPlantId);
+    const previousScan = targetPlant?.scanHistory[0];
+
+    if (scanMode === "growth" && !targetPlant) {
+      Alert.alert("Select a saved plant", "Growth comparison needs an existing plant with historical context.");
+      return;
+    }
+
     setAnalyzing(true);
     try {
-      const result = await plantIntelligenceClient.analyze({ imageUri: uri, mode: scanMode });
+      const result = await plantIntelligenceClient.analyze({
+        imageUri: uri,
+        mode: scanMode,
+        plantId: targetPlant?.id,
+        previousScan
+      });
       setScanResult(result);
       setScreen("result");
     } catch {
@@ -146,6 +160,9 @@ export default function App() {
         <ScanScreen
           mode={scanMode}
           onMode={setScanMode}
+          plants={plants}
+          targetPlantId={scanTargetPlantId}
+          onTargetPlant={setScanTargetPlantId}
           capturedUri={capturedUri}
           onCaptured={setCapturedUri}
           analyzing={analyzing}
@@ -159,6 +176,7 @@ export default function App() {
         <ResultScreen
           result={scanResult}
           plants={plants}
+          targetPlantId={scanTargetPlantId}
           onSave={saveScanAsPlant}
           onApplyToPlant={applyScanToExisting}
           onRescan={() => setScreen("scan")}
@@ -314,7 +332,7 @@ function HomeScreen({
         ))}
       </View>
 
-      <Text style={styles.prototypeNote}>v0.1 uses a local prototype analysis engine. Production botanical AI and cloud inference are intentionally not represented as complete yet.</Text>
+      <Text style={styles.prototypeNote}>v0.3 now models confidence, unknown states, evidence, ranked findings, and historical comparison. The bundled local engine remains a workflow simulator until a production DPN Vision backend is connected.</Text>
     </ScrollView>
   );
 }
@@ -322,6 +340,9 @@ function HomeScreen({
 function ScanScreen({
   mode,
   onMode,
+  plants,
+  targetPlantId,
+  onTargetPlant,
   capturedUri,
   onCaptured,
   analyzing,
@@ -329,6 +350,9 @@ function ScanScreen({
 }: {
   mode: ScanMode;
   onMode: (mode: ScanMode) => void;
+  plants: Plant[];
+  targetPlantId: string | null;
+  onTargetPlant: (plantId: string | null) => void;
   capturedUri: string | null;
   onCaptured: (uri: string | null) => void;
   analyzing: boolean;
@@ -337,6 +361,8 @@ function ScanScreen({
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView | null>(null);
   const [torch, setTorch] = useState(false);
+  const targetPlant = plants.find((plant) => plant.id === targetPlantId) ?? null;
+  const growthNeedsTarget = mode === "growth" && !targetPlant;
 
   const capture = async () => {
     try {
@@ -367,7 +393,7 @@ function ScanScreen({
     <View style={styles.scanScreen}>
       <View style={styles.scanHeader}>
         <View>
-          <Text style={styles.eyebrow}>PLANTPULSE VISION // CAMERA</Text>
+          <Text style={styles.eyebrow}>PLANTPULSE VISION // V0.3</Text>
           <Text style={styles.scanTitle}>Plant Intelligence Scan</Text>
         </View>
         <Pill label={mode.toUpperCase()} />
@@ -384,6 +410,34 @@ function ScanScreen({
           </Pressable>
         ))}
       </ScrollView>
+
+      <View>
+        <Text style={styles.contextLabel}>SCAN CONTEXT</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.contextStrip}>
+          <Pressable
+            onPress={() => onTargetPlant(null)}
+            style={[styles.contextChip, !targetPlantId && styles.contextChipActive]}
+          >
+            <Text style={[styles.contextChipTitle, !targetPlantId && styles.contextChipTitleActive]}>NEW / UNLINKED</Text>
+            <Text style={styles.contextChipMeta}>No history</Text>
+          </Pressable>
+          {plants.map((plant) => (
+            <Pressable
+              key={plant.id}
+              onPress={() => onTargetPlant(plant.id)}
+              style={[styles.contextChip, targetPlantId === plant.id && styles.contextChipActive]}
+            >
+              <Text style={[styles.contextChipTitle, targetPlantId === plant.id && styles.contextChipTitleActive]}>{plant.nickname}</Text>
+              <Text style={styles.contextChipMeta}>{plant.scanHistory.length} scans • Pulse {plant.healthScore}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+        {growthNeedsTarget ? (
+          <Text style={styles.contextWarning}>Growth mode requires a saved plant so PlantPulse can compare against historical data.</Text>
+        ) : targetPlant ? (
+          <Text style={styles.contextReady}>Context loaded: {targetPlant.nickname} • previous scans {targetPlant.scanHistory.length}</Text>
+        ) : null}
+      </View>
 
       <View style={styles.cameraShell}>
         {capturedUri ? (
@@ -406,7 +460,7 @@ function ScanScreen({
           <View style={[styles.corner, styles.bl]} />
           <View style={[styles.corner, styles.br]} />
           <View style={styles.scanLine} />
-          <Text style={styles.reticleLabel}>ALIGN PLANT WITHIN ANALYSIS FIELD</Text>
+          <Text style={styles.reticleLabel}>ALIGN SUBJECT // CAPTURE DETAIL + WHOLE PLANT</Text>
         </View>
       </View>
 
@@ -414,8 +468,8 @@ function ScanScreen({
         <Card style={styles.analysisCard}>
           <ActivityIndicator color={colors.green} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.analysisTitle}>ANALYZING BIOLOGICAL SIGNALS</Text>
-            <Text style={styles.analysisText}>Species matching • leaf stress • hydration • light • risk profile</Text>
+            <Text style={styles.analysisTitle}>VISION PIPELINE ACTIVE</Text>
+            <Text style={styles.analysisText}>Identity • confidence • evidence • findings • historical comparison</Text>
           </View>
         </Card>
       ) : (
@@ -423,7 +477,7 @@ function ScanScreen({
           {capturedUri ? (
             <>
               <SecondaryButton label="RETAKE" onPress={() => onCaptured(null)} />
-              <PrimaryButton label="ANALYZE PLANT" onPress={() => onAnalyze(capturedUri)} />
+              <PrimaryButton label="ANALYZE PLANT" disabled={growthNeedsTarget} onPress={() => onAnalyze(capturedUri)} />
             </>
           ) : (
             <>
@@ -437,7 +491,7 @@ function ScanScreen({
         </View>
       )}
 
-      <Text style={styles.prototypeNote}>Prototype scan results are generated locally for UI and workflow testing. Do not use v0.1 results for ingestion, toxicity, or treatment decisions.</Text>
+      <Text style={styles.prototypeNote}>The current local engine exercises the full v0.3 confidence/evidence workflow but does not perform production botanical computer vision. Production inference is connected through the DPN Vision API adapter.</Text>
     </View>
   );
 }
@@ -445,25 +499,39 @@ function ScanScreen({
 function ResultScreen({
   result,
   plants,
+  targetPlantId,
   onSave,
   onApplyToPlant,
   onRescan
 }: {
   result: ScanResult;
   plants: Plant[];
+  targetPlantId: string | null;
   onSave: () => void;
   onApplyToPlant: (plantId: string) => void;
   onRescan: () => void;
 }) {
+  const targetPlant = plants.find((plant) => plant.id === targetPlantId) ?? null;
+  const statusTone =
+    result.identificationStatus === "CONFIDENT"
+      ? "green"
+      : result.identificationStatus === "REVIEW"
+        ? "amber"
+        : "red";
+
   return (
     <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
       <View style={styles.resultTop}>
-        <View>
-          <Text style={styles.eyebrow}>DPN PLANTPULSE // ANALYSIS COMPLETE</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.eyebrow}>DPN PLANTPULSE // VISION ANALYSIS</Text>
           <Text style={styles.resultName}>{result.commonName}</Text>
           <Text style={styles.plantLatin}>{result.scientificName}</Text>
+          <View style={styles.tagRow}>
+            <Pill label={result.identificationStatus} tone={statusTone} />
+            <Pill label={result.confidenceBand + " CONFIDENCE"} tone={statusTone} />
+            <Pill label={result.engine === "local-prototype" ? "LOCAL PROTOTYPE" : "DPN VISION API"} tone={result.prototype ? "amber" : "green"} />
+          </View>
         </View>
-        <Pill label="PROTOTYPE" tone="amber" />
       </View>
 
       <Image source={{ uri: result.imageUri }} style={styles.resultImage} />
@@ -472,9 +540,43 @@ function ResultScreen({
         <ScoreBadge score={result.healthScore} band={result.band} />
         <View style={styles.scoreCopy}>
           <Text style={styles.scoreHeadline}>PLANTPULSE SCORE</Text>
-          <Text style={styles.scoreBody}>Identification confidence preview: {result.identificationConfidence}%</Text>
-          <Text style={styles.scoreBody}>Mode: {result.mode.toUpperCase()}</Text>
+          <Text style={styles.scoreBody}>Identification confidence: {result.identificationConfidence}%</Text>
+          <Text style={styles.scoreBody}>Capture quality: {result.captureQuality.score}%</Text>
+          <Text style={styles.scoreBody}>Engine: {result.modelVersion}</Text>
         </View>
+      </Card>
+
+      {result.identificationStatus !== "CONFIDENT" ? (
+        <Card style={styles.warningCard}>
+          <Text style={styles.warningTitle}>
+            {result.identificationStatus === "UNKNOWN" ? "IDENTIFICATION UNKNOWN" : "IDENTIFICATION NEEDS REVIEW"}
+          </Text>
+          <Text style={styles.warningText}>Do not rely on species-specific toxicity, ingestion, pesticide, or treatment guidance until identification is confirmed.</Text>
+        </Card>
+      ) : null}
+
+      <SectionTitle title="SPECIES CANDIDATES" action="RANKED" />
+      <Card>
+        {result.speciesCandidates.map((candidate, index) => (
+          <View key={candidate.scientificName + String(index)} style={styles.candidateRow}>
+            <Text style={styles.candidateRank}>{String(index + 1).padStart(2, "0")}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.plantName}>{candidate.commonName}</Text>
+              <Text style={styles.plantLatin}>{candidate.scientificName}</Text>
+            </View>
+            <Text style={styles.candidateConfidence}>{candidate.confidence}%</Text>
+          </View>
+        ))}
+      </Card>
+
+      <SectionTitle title="CAPTURE QUALITY" action={result.captureQuality.score + "%"} />
+      <Card style={result.captureQuality.score < 70 ? styles.warningCard : undefined}>
+        {result.captureQuality.issues.length > 0 ? result.captureQuality.issues.map((issue) => (
+          <Text key={issue} style={styles.warningText}>• {issue}</Text>
+        )) : <Text style={styles.infoBody}>Capture cleared the current quality threshold.</Text>}
+        {result.captureQuality.guidance.map((guide) => (
+          <Text key={guide} style={styles.captureGuide}>→ {guide}</Text>
+        ))}
       </Card>
 
       <SectionTitle title="HEALTH TELEMETRY" />
@@ -486,6 +588,53 @@ function ResultScreen({
         <MetricBar label="Disease risk" value={result.breakdown.diseaseRisk} inverse />
         <MetricBar label="Pest risk" value={result.breakdown.pestRisk} inverse />
       </Card>
+
+      <SectionTitle title="RANKED FINDINGS" action={result.findings.length + " CANDIDATES"} />
+      {result.findings.map((finding) => (
+        <Card key={finding.id} style={styles.findingCard}>
+          <View style={styles.findingTop}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.findingCategory}>{finding.category.toUpperCase()} // {finding.severity.toUpperCase()}</Text>
+              <Text style={styles.findingTitle}>{finding.title}</Text>
+            </View>
+            <Text style={styles.findingConfidence}>{finding.confidence}%</Text>
+          </View>
+          <Text style={styles.findingSummary}>{finding.summary}</Text>
+          <Text style={styles.findingEvidenceLink}>Evidence: {finding.evidenceIds.join(" • ") || "none"}</Text>
+        </Card>
+      ))}
+
+      <SectionTitle title="EXPLAINABLE EVIDENCE" />
+      <Card>
+        {result.evidence.map((item) => (
+          <View key={item.id} style={styles.evidenceRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.timelineLabel}>{item.label}</Text>
+              <Text style={styles.timelineDate}>{item.kind.toUpperCase()} • {item.detail}</Text>
+            </View>
+            <Text style={styles.evidenceConfidence}>{item.confidence}%</Text>
+          </View>
+        ))}
+      </Card>
+
+      {result.growthComparison ? (
+        <>
+          <SectionTitle title="HISTORICAL COMPARISON" />
+          <Card style={styles.growthCard}>
+            <Text style={styles.growthTitle}>
+              {result.growthComparison.available
+                ? (result.growthComparison.scoreDelta ?? 0) >= 0
+                  ? "+" + (result.growthComparison.scoreDelta ?? 0) + " PULSE"
+                  : String(result.growthComparison.scoreDelta ?? 0) + " PULSE"
+                : "BASELINE NEEDED"}
+            </Text>
+            <Text style={styles.infoBody}>{result.growthComparison.interpretation}</Text>
+            {result.growthComparison.available ? (
+              <Text style={styles.timelineDate}>Previous {result.growthComparison.previousScore} • {result.growthComparison.elapsedDays} days elapsed</Text>
+            ) : null}
+          </Card>
+        </>
+      ) : null}
 
       <SectionTitle title="OBSERVATIONS" />
       <Card>
@@ -514,15 +663,15 @@ function ResultScreen({
       </Card>
 
       <View style={styles.buttonStack}>
-        <PrimaryButton label="SAVE AS NEW PLANT" onPress={onSave} />
+        {targetPlant ? <PrimaryButton label={"UPDATE " + targetPlant.nickname.toUpperCase()} onPress={() => onApplyToPlant(targetPlant.id)} /> : null}
+        <SecondaryButton label="SAVE AS NEW PLANT" onPress={onSave} />
         <SecondaryButton label="SCAN AGAIN" onPress={onRescan} />
       </View>
 
-      {plants.length > 0 ? (
+      {!targetPlant && plants.length > 0 ? (
         <>
-          <SectionTitle title="UPDATE EXISTING PLANT" />
+          <SectionTitle title="ATTACH TO EXISTING PLANT" />
           <Card>
-            <Text style={styles.infoBody}>Attach this scan to an existing plant to update its health score, image, and longitudinal scan history.</Text>
             {plants.slice(0, 6).map((plant) => (
               <Pressable key={plant.id} style={styles.existingPlantRow} onPress={() => onApplyToPlant(plant.id)}>
                 <View style={{ flex: 1 }}>
@@ -907,6 +1056,15 @@ const styles = StyleSheet.create({
   modeChipActive: { borderColor: colors.green, backgroundColor: colors.greenSoft },
   modeChipText: { color: colors.muted, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
   modeChipTextActive: { color: colors.green },
+  contextLabel: { color: colors.muted, fontSize: 8, fontWeight: "900", letterSpacing: 1.2, marginBottom: 5 },
+  contextStrip: { gap: 7, paddingRight: 16 },
+  contextChip: { minWidth: 125, paddingHorizontal: 11, paddingVertical: 9, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: "#080D0A" },
+  contextChipActive: { borderColor: colors.green, backgroundColor: colors.greenSoft },
+  contextChipTitle: { color: colors.muted, fontSize: 9, fontWeight: "900" },
+  contextChipTitleActive: { color: colors.green },
+  contextChipMeta: { color: colors.muted, fontSize: 8, marginTop: 3 },
+  contextWarning: { color: colors.amber, fontSize: 9, lineHeight: 14, marginTop: 5 },
+  contextReady: { color: colors.green, fontSize: 9, lineHeight: 14, marginTop: 5 },
   cameraShell: { flex: 1, minHeight: 360, maxHeight: 600, borderRadius: radius.lg, overflow: "hidden", borderWidth: 1, borderColor: "#2B523A", backgroundColor: "#080C0A" },
   camera: { width: "100%", height: "100%" },
   cameraFallback: { flex: 1, padding: 28, alignItems: "center", justifyContent: "center", gap: 14 },
@@ -983,6 +1141,21 @@ const styles = StyleSheet.create({
   sendButtonText: { color: "#041108", fontSize: 22, fontWeight: "900" },
   existingPlantRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   existingPlantScore: { color: colors.green, fontSize: 12, fontWeight: "900" },
+  candidateRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 9, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  candidateRank: { color: colors.green, fontSize: 9, fontWeight: "900" },
+  candidateConfidence: { color: colors.text, fontSize: 14, fontWeight: "900" },
+  captureGuide: { color: colors.muted, fontSize: 10, lineHeight: 16, marginTop: 5 },
+  findingCard: { gap: 8 },
+  findingTop: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
+  findingCategory: { color: colors.green, fontSize: 8, fontWeight: "900", letterSpacing: 1 },
+  findingTitle: { color: colors.text, fontSize: 15, fontWeight: "900", marginTop: 4 },
+  findingConfidence: { color: colors.green, fontSize: 20, fontWeight: "900" },
+  findingSummary: { color: colors.muted, fontSize: 11, lineHeight: 18 },
+  findingEvidenceLink: { color: "#6F8A7A", fontSize: 8, lineHeight: 13 },
+  evidenceRow: { flexDirection: "row", gap: 12, alignItems: "center", paddingVertical: 9, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  evidenceConfidence: { color: colors.green, fontSize: 14, fontWeight: "900" },
+  growthCard: { borderColor: "#275D3A" },
+  growthTitle: { color: colors.green, fontSize: 22, fontWeight: "900" },
   quickActionGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   quickAction: { width: "48%", minHeight: 64, borderRadius: radius.md, borderWidth: 1, borderColor: "#275D3A", backgroundColor: "#0A1710", alignItems: "center", justifyContent: "center", gap: 4 },
   quickActionIcon: { color: colors.green, fontSize: 18, fontWeight: "900" },
