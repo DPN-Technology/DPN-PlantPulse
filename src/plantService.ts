@@ -38,17 +38,23 @@ export function createPlantFromScan(result: ScanResult): Plant {
 }
 
 export function attachScanToPlant(plant: Plant, result: ScanResult): Plant {
+  const canRefreshIdentity = result.identificationStatus === "CONFIDENT";
+
   return {
     ...plant,
-    commonName: result.commonName,
-    scientificName: result.scientificName,
+    commonName: canRefreshIdentity ? result.commonName : plant.commonName,
+    scientificName: canRefreshIdentity ? result.scientificName : plant.scientificName,
     healthScore: result.healthScore,
     imageUri: result.imageUri,
     lastScanAt: result.createdAt,
-    toxicity: result.toxicity,
+    toxicity: canRefreshIdentity ? result.toxicity : plant.toxicity,
     scanHistory: [result, ...plant.scanHistory].slice(0, 100),
     timeline: [
-      event("scan", result.mode.toUpperCase() + " scan — " + result.healthScore + "/100", result.createdAt),
+      event(
+        "scan",
+        result.mode.toUpperCase() + " scan — " + result.healthScore + "/100 • " + result.identificationStatus,
+        result.createdAt
+      ),
       ...plant.timeline
     ].slice(0, 250)
   };
