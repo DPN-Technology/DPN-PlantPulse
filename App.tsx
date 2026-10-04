@@ -821,6 +821,9 @@ function RecommendationCard({
         <Pressable style={styles.feedbackButton} onPress={() => onFeedback(plant.id, recommendation.id, "HELPFUL")}>
           <Text style={styles.feedbackButtonText}>HELPFUL</Text>
         </Pressable>
+        <Pressable style={styles.feedbackButton} onPress={() => onFeedback(plant.id, recommendation.id, "NOT_HELPFUL")}>
+          <Text style={styles.feedbackButtonText}>NOT HELPFUL</Text>
+        </Pressable>
         <Pressable style={styles.feedbackButton} onPress={() => onFeedback(plant.id, recommendation.id, "DISMISSED")}>
           <Text style={styles.feedbackButtonText}>DISMISS</Text>
         </Pressable>
