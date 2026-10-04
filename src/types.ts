@@ -37,11 +37,20 @@ export interface ScanResult {
   prototype: true;
 }
 
+export type PlantScan = ScanResult;
+
+export type CareAction = "water" | "fertilize" | "prune" | "inspect";
+
 export interface TimelineEvent {
   id: string;
-  type: "scan" | "water" | "fertilize" | "prune" | "note" | "move";
+  type: "scan" | "water" | "fertilize" | "prune" | "inspect" | "note" | "move";
   label: string;
   at: string;
+}
+
+export interface CarePlan {
+  waterIntervalDays: number;
+  feedIntervalDays: number;
 }
 
 export interface Plant {
@@ -53,8 +62,21 @@ export interface Plant {
   healthScore: number;
   imageUri?: string;
   lastScanAt?: string;
-  nextWaterDays: number;
-  nextFeedDays: number;
+  lastWateredAt?: string;
+  lastFedAt?: string;
+  nextWaterAt: string;
+  nextFeedAt: string;
+  carePlan: CarePlan;
   toxicity: string;
+  notes?: string;
+  scanHistory: PlantScan[];
   timeline: TimelineEvent[];
+}
+
+export interface PlantProfileUpdate {
+  nickname: string;
+  location: string;
+  waterIntervalDays: number;
+  feedIntervalDays: number;
+  notes?: string;
 }

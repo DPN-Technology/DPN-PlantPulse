@@ -22,11 +22,17 @@
 - [ ] Authenticated DPN identity
 - [ ] Cloud plant records
 - [ ] Image upload service
-- [ ] Plant / scan API contracts
-- [ ] Real timeline writes
-- [ ] Care completion actions
+- [x] Plant / scan client service contracts
+- [x] Versioned local plant-record schema + v0.1 migration
+- [x] Persistent scan history per plant
+- [x] Attach repeat scans to existing plants
+- [x] Real timeline writes
+- [x] Care completion actions
+- [x] Calendar-based watering / feeding targets
+- [x] Editable per-plant care intervals
+- [x] Room / location management
+- [x] Plant notes
 - [ ] Notifications
-- [ ] Room / location management
 - [ ] QR plant tags
 
 ## v0.3 — Vision intelligence
