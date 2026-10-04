@@ -1,6 +1,6 @@
 # DPN PlantPulse Data Model
 
-PlantPulse v0.2 converts the first prototype into a persistent longitudinal plant record.
+PlantPulse v0.4 maintains a versioned persistent longitudinal plant record.
 
 ## Plant
 
@@ -17,6 +17,7 @@ A plant is the durable identity for one owned plant. It contains:
 - notes
 - scan history
 - chronological care / scan timeline
+- adaptive recommendation feedback
 
 ## Scan history
 
@@ -54,13 +55,13 @@ The same pattern is used for feeding. Pruning and inspections create durable tim
 
 ## Local persistence
 
-v0.2 stores records under:
+v0.4 stores records under:
 
 ```text
-@dpn_plantpulse/plants/v2
+@dpn_plantpulse/plants/v4
 ```
 
-On first load, the app checks for the legacy v0.1 key and migrates those records into the v0.2 schema. Missing care-plan and scan-history fields are normalized with safe defaults.
+On first load, the app checks v4 first, then v3, v2, and v1. Older records are normalized into the current schema. Missing scan metadata, care-plan fields, and recommendation feedback are filled with safe defaults before the migrated record is written to v4.
 
 ## Service boundary
 

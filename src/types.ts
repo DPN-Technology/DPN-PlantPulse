@@ -15,6 +15,10 @@ export type ConfidenceBand = "HIGH" | "MEDIUM" | "LOW";
 export type FindingCategory = "disease" | "pest" | "hydration" | "light" | "nutrition" | "growth" | "structural";
 export type FindingSeverity = "info" | "watch" | "warning" | "critical";
 export type EvidenceKind = "color" | "shape" | "texture" | "pattern" | "growth" | "capture";
+export type TrendDirection = "IMPROVING" | "STABLE" | "DECLINING" | "INSUFFICIENT_DATA";
+export type PredictionRisk = "LOW" | "WATCH" | "ELEVATED" | "HIGH";
+export type RecommendationPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+export type RecommendationFeedbackValue = "HELPFUL" | "NOT_HELPFUL" | "APPLIED" | "DISMISSED";
 
 export interface HealthBreakdown {
   leaf: number;
@@ -106,6 +110,50 @@ export interface CarePlan {
   feedIntervalDays: number;
 }
 
+export interface HealthTrend {
+  direction: TrendDirection;
+  sampleCount: number;
+  scoreDelta: number;
+  dailyRate: number;
+  confidence: number;
+  summary: string;
+}
+
+export interface PlantPrediction {
+  horizonDays: number;
+  projectedScore: number;
+  risk: PredictionRisk;
+  confidence: number;
+  reasons: string[];
+  disclaimer: string;
+}
+
+export interface CareRecommendation {
+  id: string;
+  category: "water" | "feed" | "light" | "inspect" | "environment" | "care-plan";
+  title: string;
+  detail: string;
+  rationale: string[];
+  priority: RecommendationPriority;
+  confidence: number;
+  suggestedWaterIntervalDays?: number;
+  suggestedFeedIntervalDays?: number;
+}
+
+export interface CareIntelligenceSnapshot {
+  generatedAt: string;
+  trend: HealthTrend;
+  prediction: PlantPrediction;
+  recommendations: CareRecommendation[];
+  riskSignals: string[];
+}
+
+export interface RecommendationFeedback {
+  recommendationId: string;
+  value: RecommendationFeedbackValue;
+  at: string;
+}
+
 export interface Plant {
   id: string;
   nickname: string;
@@ -124,6 +172,7 @@ export interface Plant {
   notes?: string;
   scanHistory: PlantScan[];
   timeline: TimelineEvent[];
+  recommendationFeedback: RecommendationFeedback[];
 }
 
 export interface PlantProfileUpdate {

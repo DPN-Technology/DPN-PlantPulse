@@ -54,12 +54,20 @@
 - [ ] Server-side model registry and signed model/version metadata
 
 ## v0.4 — Adaptive care
-- [ ] Species-aware watering model
-- [ ] User feedback loop
+- [x] Prototype species-aware care baselines
+- [x] Persistent recommendation feedback loop
+- [x] Feedback-aware ranking / suppression
+- [x] Care trend analytics from saved scans
+- [x] Explainable 7-day PlantPulse projection
+- [x] Predictive risk watchlist
+- [x] Image-derived light compatibility recommendations
+- [x] Explicit user approval for adaptive interval changes
+- [x] Adaptive changes written to the plant timeline
+- [x] v0.3 → v0.4 persistence migration
 - [ ] Weather-aware outdoor care
-- [ ] Light estimation
-- [ ] Care trend analytics
-- [ ] Predictive health decline alerts
+- [ ] Real environmental light measurement
+- [ ] Push-notification predictive alerts
+- [ ] Production-calibrated prediction model
 
 ## v0.5 — Sensors
 - [ ] BLE sensor protocol

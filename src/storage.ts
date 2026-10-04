@@ -7,6 +7,7 @@ import {
   PlantScan
 } from "./types";
 
+const PLANTS_V4_KEY = "@dpn_plantpulse/plants/v4";
 const PLANTS_V3_KEY = "@dpn_plantpulse/plants/v3";
 const PLANTS_V2_KEY = "@dpn_plantpulse/plants/v2";
 const LEGACY_PLANTS_KEY = "@dpn_plantpulse/plants/v1";
@@ -117,7 +118,8 @@ function normalizePlant(raw: LegacyPlant): Plant {
     toxicity: raw.toxicity,
     notes: raw.notes,
     scanHistory,
-    timeline: Array.isArray(raw.timeline) ? raw.timeline : []
+    timeline: Array.isArray(raw.timeline) ? raw.timeline : [],
+    recommendationFeedback: Array.isArray(raw.recommendationFeedback) ? raw.recommendationFeedback : []
   };
 }
 
@@ -129,6 +131,8 @@ function normalizeCollection(input: unknown, fallback: Plant[]): Plant[] {
 }
 
 async function loadFirstAvailable(): Promise<string | null> {
+  const v4 = await AsyncStorage.getItem(PLANTS_V4_KEY);
+  if (v4) return v4;
   const v3 = await AsyncStorage.getItem(PLANTS_V3_KEY);
   if (v3) return v3;
   const v2 = await AsyncStorage.getItem(PLANTS_V2_KEY);
@@ -150,5 +154,5 @@ export async function loadPlants(fallback: Plant[]): Promise<Plant[]> {
 }
 
 export async function savePlants(plants: Plant[]): Promise<void> {
-  await AsyncStorage.setItem(PLANTS_V3_KEY, JSON.stringify(plants));
+  await AsyncStorage.setItem(PLANTS_V4_KEY, JSON.stringify(plants));
 }
