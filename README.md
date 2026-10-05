@@ -6,7 +6,7 @@
 <p align="center">
   <img alt="DPN Technology" src="https://img.shields.io/badge/DPN-Technology-070707?style=flat-square&logo=github">
   <img alt="PlantPulse" src="https://img.shields.io/badge/PlantPulse-Biological%20Intelligence-19C864?style=flat-square">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.12.0-19C864?style=flat-square">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.13.0-19C864?style=flat-square">
   <img alt="Security" src="https://img.shields.io/badge/security-CodeQL%20%2B%20CI-E50914?style=flat-square">
   <img alt="Status" src="https://img.shields.io/badge/status-Active%20Development-19C864?style=flat-square">
 </p>
@@ -67,7 +67,7 @@ It is **not** intended to be a branded clone of an existing plant identifier.
 | **Sensor network** | ✅ Protocol + telemetry model | moisture, temperature, humidity, light, EC, pH, device state and alerts |
 | **Offline-first records** | ✅ Implemented | local/remote revisions, dirty state, conflict detection, retry metadata |
 | **DPN Platform service** | ✅ Implemented | Fastify / Node 22, PostgreSQL, JWT/JWKS, media grants, devices, tags |
-| **Signed media sync** | ✅ Implemented | signed PUT upload path, cloud object keys, media deduplication |
+| **Verified media lifecycle** | ✅ Implemented service path | plant-bound reservations, signed PUT, server HEAD verification, attach/detach enforcement, deletion + orphan cleanup |
 | **Conflict recovery** | ✅ Implemented | explicit **KEEP LOCAL** / **USE REMOTE** resolution |
 | **Native secret storage** | ✅ Implemented | Expo SecureStore on Android/iOS |
 | **DPN OIDC client** | ✅ Implemented | discovery, Authorization Code + PKCE, UserInfo, refresh and revocation lifecycle |
@@ -198,8 +198,9 @@ LOCAL PLANT CHANGE
       │
       ├── mark local revision DIRTY
       │
-      ├── upload pending local image
-      │      └── signed object-storage PUT
+      ├── reserve plant-bound media upload
+      │      ├── signed object-storage PUT
+      │      └── server HEAD verification before cloudImageKey assignment
       │
       ├── pull current remote revisions
       │
@@ -271,6 +272,9 @@ GET  /v1/me
 GET  /v1/plants
 PUT  /v1/plants/:plantId
 POST /v1/media/uploads
+GET  /v1/media/uploads/:uploadId
+POST /v1/media/uploads/:uploadId/complete
+DELETE /v1/media/uploads/:uploadId
 GET  /v1/devices
 POST /v1/devices
 DELETE /v1/devices/:deviceId
@@ -297,7 +301,10 @@ The backend currently provides:
 - DPN Operational Control Tier B contract + health feed;
 - unique PlantPulse tag claiming;
 - audit events;
-- S3-compatible signed uploads;
+- S3-compatible signed uploads with server-side object verification;
+- plant-bound media ownership enforcement;
+- attachment/detachment lifecycle and orphan cleanup worker;
+- media lifecycle telemetry;
 - PostgreSQL notification outbox with per-device deduplication;
 - Expo Push Service ticket/receipt delivery worker;
 - local Docker / PostgreSQL / MinIO development environment;
@@ -381,7 +388,7 @@ src/
   platformRuntime.ts            Mobile sync / retry / device / conflict orchestration
   backgroundSync.ts              Native deferrable background sync worker
   platformSync.ts               Revision reconciliation and conflict handling
-  mediaSync.ts                  Signed media upload execution
+  mediaSync.ts                  Signed upload + server verification execution
   secureIdentity.ts             Native SecureStore identity boundary
   services/
     plantIntelligence.ts        Vision provider abstraction
@@ -391,7 +398,8 @@ server/
   src/app.ts                    Fastify API surface
   src/auth.ts                   JWKS + development auth modes
   src/postgresRepository.ts     PostgreSQL persistence and concurrency
-  src/objectStore.ts            Signed S3-compatible media grants
+  src/objectStore.ts            Signed S3 grants, HEAD verification and deletion
+  src/mediaLifecycleWorker.ts    Orphan cleanup + retry lifecycle
   src/notificationRepository.ts  PostgreSQL push outbox leasing / dedupe
   src/pushProvider.ts            Expo Push Service transport
   src/pushWorker.ts              Ticket / receipt / retry delivery worker
@@ -411,6 +419,7 @@ docs/
   PLATFORM_API.md
   OBSERVABILITY_SLOS.md
   DPN_OPERATIONAL_CONTROL.md
+  MEDIA_INTEGRITY.md
   ROADMAP.md
 
 .github/
@@ -470,7 +479,7 @@ The next production-readiness priorities are:
 2. **Identity operations** — key rotation, client registration policy, revocation evidence and device trust.
 3. **Background-sync validation** — prove deferrable execution on signed physical-device builds across iOS/Android power states.
 4. **Reliability productionization** — export v0.12 Prometheus metrics to the production monitoring stack, connect dashboards/alerts/traces, and validate SLOs over a real deployment window.
-5. **Media verification** — server-side completion and object validation.
+5. **Media production hardening** — v0.13 verifies size/type/ETag metadata and lifecycle ownership; production still needs bucket/KMS policy, content scanning where required, EXIF/privacy processing, and deployed cleanup proof.
 6. **Production deployment** — managed PostgreSQL, object storage, DNS/TLS/API gateway and observability.
 7. **Production Plant Intelligence** — trained/calibrated botanical models and verified safety knowledge.
 
@@ -478,7 +487,8 @@ Full engineering roadmap: [docs/ROADMAP.md](docs/ROADMAP.md)
 Production-readiness gate: [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md)  
 DPN Identity / OIDC client: [docs/OIDC_IDENTITY.md](docs/OIDC_IDENTITY.md)  
 Observability / SLOs: [docs/OBSERVABILITY_SLOS.md](docs/OBSERVABILITY_SLOS.md)  
-DPN Operational Control: [docs/DPN_OPERATIONAL_CONTROL.md](docs/DPN_OPERATIONAL_CONTROL.md)
+DPN Operational Control: [docs/DPN_OPERATIONAL_CONTROL.md](docs/DPN_OPERATIONAL_CONTROL.md)  
+Media integrity: [docs/MEDIA_INTEGRITY.md](docs/MEDIA_INTEGRITY.md)
 
 ---
 
