@@ -5,6 +5,7 @@ import { AuthVerifier } from "../src/auth.js";
 import { InMemoryPlatformRepository } from "../src/memoryRepository.js";
 import { InMemoryNotificationOutboxRepository } from "../src/memoryNotificationRepository.js";
 import { ObjectStore } from "../src/objectStore.js";
+import { PlantPulseObservability } from "../src/observability.js";
 import {
   AuthContext,
   RequestValidationError,
@@ -64,7 +65,7 @@ test("health is public and reports service version", async () => {
   assert.deepEqual(response.json(), {
     service: "dpn-plantpulse-platform",
     status: "ok",
-    version: "0.11.0"
+    version: "0.12.0"
   });
   await server.close();
 });
@@ -486,5 +487,112 @@ test("operations health is authenticated and tenant-user scoped", async () => {
   assert.equal(response.json().activeDevices, 1);
   assert.equal(response.json().push.pending, 1);
   assert.ok(response.json().generatedAt);
+  await server.close();
+});
+
+
+test("observability exposes correlated Prometheus metrics and DPN control health", async () => {
+  const observability = new PlantPulseObservability("0.12.0");
+  const notificationRepository = new InMemoryNotificationOutboxRepository();
+  const server = await createPlatformApp({
+    repository: new InMemoryPlatformRepository(),
+    notificationRepository,
+    objectStore: new TestObjectStore(),
+    authVerifier: new HeaderAuthVerifier(),
+    observability
+  });
+
+  const health = await server.inject({ method: "GET", url: "/health" });
+  assert.equal(health.statusCode, 200);
+  assert.ok(health.headers["x-request-id"]);
+  assert.equal(health.headers["x-dpn-service"], "DPN-PLANTPULSE");
+
+  const unauthorized = await server.inject({ method: "GET", url: "/v1/plants" });
+  assert.equal(unauthorized.statusCode, 401);
+
+  const metrics = await server.inject({ method: "GET", url: "/metrics" });
+  assert.equal(metrics.statusCode, 200);
+  assert.match(metrics.body, /dpn_plantpulse_http_requests_total/);
+  assert.match(metrics.body, /dpn_plantpulse_auth_failures_total/);
+
+  const control = await server.inject({ method: "GET", url: "/control/health" });
+  assert.equal(control.statusCode, 200);
+  assert.equal(control.json().productId, "DPN-PLANTPULSE");
+  assert.equal(control.json().integrationId, "DPN-PLANTPULSE");
+  assert.equal(control.json().status, "ONLINE");
+  assert.equal(control.json().version, "0.12.0");
+  assert.equal(control.json().readiness.database, true);
+  assert.equal(control.json().readiness.notificationOutbox, true);
+  assert.ok(control.json().reliability.slo.targets.apiP95Milliseconds);
+
+  await server.close();
+});
+
+test("sync operation reports require an enrolled device and surface in operations health", async () => {
+  const repository = new InMemoryPlatformRepository();
+  const observability = new PlantPulseObservability("0.12.0");
+  const server = await createPlatformApp({
+    repository,
+    objectStore: new TestObjectStore(),
+    authVerifier: new HeaderAuthVerifier(),
+    observability
+  });
+  const headers = { authorization: "Bearer tenant-a:user-a" };
+
+  const rejected = await server.inject({
+    method: "POST",
+    url: "/v1/operations/sync-report",
+    headers,
+    payload: {
+      deviceId: "unknown-phone",
+      source: "BACKGROUND",
+      result: "FAILED",
+      observedAt: new Date().toISOString(),
+      failed: 1,
+      conflicts: 0
+    }
+  });
+  assert.equal(rejected.statusCode, 404);
+
+  await server.inject({
+    method: "POST",
+    url: "/v1/devices",
+    headers,
+    payload: { deviceId: "phone-1", name: "Phone", platform: "android" }
+  });
+
+  const observedAt = new Date().toISOString();
+  const accepted = await server.inject({
+    method: "POST",
+    url: "/v1/operations/sync-report",
+    headers,
+    payload: {
+      deviceId: "phone-1",
+      source: "BACKGROUND",
+      result: "FAILED",
+      observedAt,
+      pushed: 0,
+      pulled: 2,
+      uploadedImages: 0,
+      failed: 1,
+      conflicts: 1,
+      queuedNotifications: 0
+    }
+  });
+  assert.equal(accepted.statusCode, 202);
+
+  const health = await server.inject({
+    method: "GET",
+    url: "/v1/operations/health",
+    headers
+  });
+  assert.equal(health.statusCode, 200);
+  assert.equal(health.json().operations.lastBackgroundSyncResult, "FAILED");
+  assert.equal(health.json().operations.lastBackgroundSyncAt, observedAt);
+  assert.equal(health.json().operations.failedDevices, 1);
+
+  const snapshot = observability.snapshot();
+  assert.equal(snapshot.sync.backgroundFailed, 1);
+  assert.equal(snapshot.sync.conflictsReported, 1);
   await server.close();
 });
