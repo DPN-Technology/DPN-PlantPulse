@@ -177,7 +177,8 @@ async function enrollDevice(
 
 export async function synchronizePlatformRuntime(
   inputPlants: Plant[],
-  state: PlatformState
+  state: PlatformState,
+  source: "FOREGROUND" | "BACKGROUND" = "FOREGROUND"
 ): Promise<{ plants: Plant[]; state: PlatformState }> {
   const attempt = (state.syncAttempt ?? 0) + 1;
 
@@ -225,6 +226,25 @@ export async function synchronizePlatformRuntime(
 
     const failed = sync.failed + media.failedImages;
     const completedAt = sync.completedAt;
+    const result = failed > 0 ? "FAILED" as const : "SUCCESS" as const;
+
+    try {
+      await api.reportSyncOperation({
+        deviceId: device.deviceId,
+        source,
+        result,
+        observedAt: completedAt,
+        pushed: sync.pushed,
+        pulled: sync.pulled,
+        uploadedImages: media.uploadedImages,
+        failed,
+        conflicts: conflicts.length,
+        queuedNotifications
+      });
+    } catch {
+      // Telemetry must never turn a completed synchronization into a failed synchronization.
+    }
+
     return {
       plants: sync.plants,
       state: {
@@ -251,6 +271,25 @@ export async function synchronizePlatformRuntime(
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown DPN Platform synchronization error";
+    try {
+      if (state.device) {
+        const renewedState = await renewIdentityForRuntime(state);
+        await apiForState(renewedState).reportSyncOperation({
+          deviceId: state.device.deviceId,
+          source,
+          result: "FAILED",
+          observedAt: new Date().toISOString(),
+          pushed: 0,
+          pulled: 0,
+          uploadedImages: 0,
+          failed: 1,
+          conflicts: state.conflicts.length,
+          queuedNotifications: 0
+        });
+      }
+    } catch {
+      // If the platform itself is unreachable, local retry metadata remains the evidence source.
+    }
     return {
       plants: inputPlants,
       state: {
