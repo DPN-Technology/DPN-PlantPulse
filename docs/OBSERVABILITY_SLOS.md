@@ -1,6 +1,6 @@
 # DPN PlantPulse Observability & SLOs
 
-PlantPulse v0.12 establishes an instrumentation and reliability contract. These targets are engineering objectives, not claims that a production deployment has already achieved them.
+PlantPulse v0.12+ establishes an instrumentation and reliability contract. These targets are engineering objectives, not claims that a production deployment has already achieved them.
 
 ## Metrics surface
 
@@ -19,6 +19,7 @@ Prometheus-compatible custom metrics include:
 - `dpn_plantpulse_sync_runs_total`
 - `dpn_plantpulse_sync_conflicts_reported_total`
 - `dpn_plantpulse_dependency_ready`
+- `dpn_plantpulse_media_events_total`
 
 Node/process metrics use the `dpn_plantpulse_node_` prefix.
 
@@ -88,6 +89,6 @@ Reports are accepted only from active enrolled devices. PostgreSQL keeps the new
 - OTLP/distributed tracing
 - API/database/push alert routing
 - database-pool saturation metrics
-- media upload success/failure metric
+- media lifecycle metrics are implemented for reservation, verification, verification failure, explicit deletion, cleanup deletion and cleanup retry
 - error-budget and burn-rate alerts
 - multi-day SLO verification
