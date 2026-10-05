@@ -6,7 +6,7 @@
 <p align="center">
   <img alt="DPN Technology" src="https://img.shields.io/badge/DPN-Technology-070707?style=flat-square&logo=github">
   <img alt="PlantPulse" src="https://img.shields.io/badge/PlantPulse-Biological%20Intelligence-19C864?style=flat-square">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.10.0-19C864?style=flat-square">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.11.0-19C864?style=flat-square">
   <img alt="Security" src="https://img.shields.io/badge/security-CodeQL%20%2B%20CI-E50914?style=flat-square">
   <img alt="Status" src="https://img.shields.io/badge/status-Active%20Development-19C864?style=flat-square">
 </p>
@@ -73,6 +73,9 @@ It is **not** intended to be a branded clone of an existing plant identifier.
 | **DPN OIDC client** | ✅ Implemented | discovery, Authorization Code + PKCE, UserInfo, refresh and revocation lifecycle |
 | **Native background sync** | ✅ Implemented | Expo BackgroundTask / TaskManager worker using the existing conflict-safe sync engine |
 | **Push delivery** | ✅ Implemented service path | PostgreSQL outbox, Expo Push tickets/receipts, retry/backoff, invalid-token retirement |
+| **Notification policy** | ✅ Implemented | server-enforced category controls, quiet hours and IANA timezone |
+| **Device trust** | ✅ Implemented | ownership-safe enrollment, inventory and sticky revocation |
+| **Operational health** | ✅ Implemented durable view | plant/device/outbox counters exposed through authenticated control-plane API |
 | **Production botanical AI** | ⛔ Not claimed | production model training/calibration remains future work |
 | **Production DPN cloud deployment** | ⛔ Not claimed | production identity, managed DB/storage, DNS/TLS/gateway remain provisioning work |
 
@@ -264,7 +267,12 @@ GET  /v1/me
 GET  /v1/plants
 PUT  /v1/plants/:plantId
 POST /v1/media/uploads
+GET  /v1/devices
 POST /v1/devices
+DELETE /v1/devices/:deviceId
+GET  /v1/notification-preferences
+PUT  /v1/notification-preferences
+GET  /v1/operations/health
 POST /v1/plant-tags/claim
 POST /v1/notifications/queue
 ```
@@ -274,7 +282,9 @@ The backend currently provides:
 - Fastify / Node.js 22 runtime;
 - PostgreSQL persistence;
 - row-locked optimistic revision checks;
-- device registration;
+- ownership-safe device registration and sticky revocation;
+- notification policy / quiet-hour enforcement;
+- authenticated operational health counters;
 - unique PlantPulse tag claiming;
 - audit events;
 - S3-compatible signed uploads;
@@ -442,7 +452,7 @@ The next production-readiness priorities are:
 1. **DPN One identity deployment** — provision the authorization server/client registration that the v0.9 OIDC client is ready to use.
 2. **Identity operations** — key rotation, client registration policy, revocation evidence and device trust.
 3. **Background-sync validation** — prove deferrable execution on signed physical-device builds across iOS/Android power states.
-4. **Push productionization** — provision production push credentials, delivery dashboards and notification preferences.
+4. **Push productionization** — provision production push credentials and external delivery/SLO dashboards; v0.11 now includes server-side notification preferences and durable operational counters.
 5. **Media verification** — server-side completion and object validation.
 6. **Production deployment** — managed PostgreSQL, object storage, DNS/TLS/API gateway and observability.
 7. **Production Plant Intelligence** — trained/calibrated botanical models and verified safety knowledge.

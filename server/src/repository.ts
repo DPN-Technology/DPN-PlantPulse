@@ -4,7 +4,8 @@ import {
   PlantTagClaimInput,
   PushPlantInput,
   PushPlantResult,
-  RegisteredDevice
+  RegisteredDevice,
+  TenantOperationalHealth
 } from "./types.js";
 
 export interface PlatformRepository {
@@ -13,5 +14,8 @@ export interface PlatformRepository {
   listPlants(tenantId: string): Promise<CloudPlantRecord[]>;
   pushPlant(input: PushPlantInput): Promise<PushPlantResult>;
   registerDevice(input: DeviceRegistrationInput): Promise<RegisteredDevice>;
+  listDevices(tenantId: string, userId: string): Promise<RegisteredDevice[]>;
+  revokeDevice(tenantId: string, userId: string, deviceId: string): Promise<void>;
+  getTenantOperationalHealth(tenantId: string, userId: string): Promise<TenantOperationalHealth>;
   claimPlantTag(input: PlantTagClaimInput): Promise<void>;
 }

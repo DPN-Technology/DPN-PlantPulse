@@ -36,6 +36,28 @@ export interface NotificationReceiptCandidate {
   attemptCount: number;
 }
 
+export interface NotificationPreferences {
+  care: boolean;
+  prediction: boolean;
+  sensor: boolean;
+  sync: boolean;
+  security: boolean;
+  quietHoursEnabled: boolean;
+  quietStart: string;
+  quietEnd: string;
+  timeZone: string;
+  updatedAt?: string;
+}
+
+export interface NotificationDeliveryStats {
+  pending: number;
+  retry: number;
+  ticketed: number;
+  delivered: number;
+  dead: number;
+  lastDeliveredAt?: string;
+}
+
 export interface NotificationOutboxRepository {
   ping(): Promise<void>;
   close(): Promise<void>;
@@ -48,4 +70,7 @@ export interface NotificationOutboxRepository {
   leaseReceipts(limit: number): Promise<NotificationReceiptCandidate[]>;
   rescheduleReceipt(id: string, nextCheckAt: Date): Promise<void>;
   disablePushToken(tenantId: string, deviceId: string, pushToken: string): Promise<void>;
+  getPreferences(tenantId: string, userId: string): Promise<NotificationPreferences>;
+  updatePreferences(tenantId: string, userId: string, preferences: NotificationPreferences): Promise<NotificationPreferences>;
+  getDeliveryStats(tenantId: string, userId: string): Promise<NotificationDeliveryStats>;
 }

@@ -48,6 +48,9 @@ import {
   disconnectPlatform,
   installIdentitySession,
   registerPushAndDevice,
+  refreshPlatformControlPlane,
+  revokeTrustedPlatformDevice,
+  savePlatformNotificationPreferences,
   resolvePlatformConflict,
   restorePlatformRuntime,
   shouldAutoRetryPlatformSync,
@@ -65,6 +68,7 @@ import { colors, radius } from "./src/theme";
 import {
   CareAction,
   CareRecommendation,
+  NotificationPreferences,
   Plant,
   PlantProfileUpdate,
   PlatformState,
@@ -86,6 +90,26 @@ const modes: Array<{ key: ScanMode; label: string }> = [
   { key: "soil", label: "SOIL" },
   { key: "growth", label: "GROWTH" }
 ];
+
+function defaultNotificationPreferences(): NotificationPreferences {
+  let timeZone = "UTC";
+  try {
+    timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    // UTC remains the safe fallback.
+  }
+  return {
+    care: true,
+    prediction: true,
+    sensor: true,
+    sync: true,
+    security: true,
+    quietHoursEnabled: false,
+    quietStart: "22:00",
+    quietEnd: "07:00",
+    timeZone
+  };
+}
 
 function SectionTitle({ title, action }: { title: string; action?: string }) {
   return (
@@ -158,6 +182,16 @@ export default function App() {
   useEffect(() => {
     loadPlatformState()
       .then((stored) => restorePlatformRuntime(stored))
+      .then(async (restored) => {
+        if (restored.identity.status === "AUTHENTICATED" && restored.platformBaseUrl) {
+          try {
+            return await refreshPlatformControlPlane(restored);
+          } catch {
+            return restored;
+          }
+        }
+        return restored;
+      })
       .then((restored) => {
         setPlatformState(restored);
         setPlatformLoaded(true);
@@ -384,6 +418,36 @@ export default function App() {
     }
   };
 
+  const saveNotificationPreferencesRuntime = async (preferences: NotificationPreferences) => {
+    try {
+      const next = await savePlatformNotificationPreferences(platformState, preferences);
+      setPlatformState(next);
+      Alert.alert("Notification policy saved", "PlantPulse delivery policy is now enforced server-side.");
+    } catch (error) {
+      Alert.alert("Preference update failed", error instanceof Error ? error.message : "Could not update notification policy.");
+    }
+  };
+
+  const refreshControlPlaneRuntime = async () => {
+    try {
+      setPlatformState(await refreshPlatformControlPlane(platformState));
+    } catch (error) {
+      Alert.alert("Operational refresh failed", error instanceof Error ? error.message : "Could not refresh platform operations.");
+    }
+  };
+
+  const revokeTrustedDeviceRuntime = async (deviceId: string) => {
+    if (deviceId === platformState.device?.deviceId) {
+      Alert.alert("Current device", "Use DISCONNECT DPN IDENTITY to remove this device session locally.");
+      return;
+    }
+    try {
+      setPlatformState(await revokeTrustedPlatformDevice(platformState, deviceId));
+    } catch (error) {
+      Alert.alert("Device revocation failed", error instanceof Error ? error.message : "Could not revoke device trust.");
+    }
+  };
+
   const resolveConflictRuntime = (conflict: SyncConflict, strategy: "KEEP_LOCAL" | "USE_REMOTE") => {
     try {
       const result = resolvePlatformConflict(plants, platformState, conflict, strategy);
@@ -504,6 +568,9 @@ export default function App() {
           onDisconnect={() => void disconnectPlatformRuntime()}
           onRegisterPush={() => void registerPushRuntime()}
           onTestBackgroundSync={() => void testBackgroundSyncRuntime()}
+          onSaveNotificationPreferences={(preferences) => void saveNotificationPreferencesRuntime(preferences)}
+          onRefreshControlPlane={() => void refreshControlPlaneRuntime()}
+          onRevokeDevice={(deviceId) => void revokeTrustedDeviceRuntime(deviceId)}
           onResolveConflict={resolveConflictRuntime}
         />
       );
@@ -1680,6 +1747,9 @@ function PlatformScreen({
   onDisconnect,
   onRegisterPush,
   onTestBackgroundSync,
+  onSaveNotificationPreferences,
+  onRefreshControlPlane,
+  onRevokeDevice,
   onResolveConflict
 }: {
   plants: Plant[];
@@ -1697,6 +1767,9 @@ function PlatformScreen({
   onDisconnect: () => void;
   onRegisterPush: () => void;
   onTestBackgroundSync: () => void;
+  onSaveNotificationPreferences: (preferences: NotificationPreferences) => void;
+  onRefreshControlPlane: () => void;
+  onRevokeDevice: (deviceId: string) => void;
   onResolveConflict: (conflict: SyncConflict, strategy: "KEEP_LOCAL" | "USE_REMOTE") => void;
 }) {
   const [permission, requestPermission] = useCameraPermissions();
@@ -1705,10 +1778,19 @@ function PlatformScreen({
   const [endpoint, setEndpoint] = useState(platformState.platformBaseUrl ?? "");
   const [tenantId, setTenantId] = useState(platformState.identity.profile?.tenantId ?? "dpn-local");
   const [userId, setUserId] = useState(platformState.identity.profile?.userId ?? "developer");
+  const [preferences, setPreferences] = useState<NotificationPreferences>(
+    platformState.notificationPreferences ?? defaultNotificationPreferences()
+  );
 
   useEffect(() => {
     if (platformState.platformBaseUrl) setEndpoint(platformState.platformBaseUrl);
   }, [platformState.platformBaseUrl]);
+
+  useEffect(() => {
+    if (platformState.notificationPreferences) {
+      setPreferences(platformState.notificationPreferences);
+    }
+  }, [platformState.notificationPreferences]);
 
   const synced = plants.filter((plant) => plant.sync.state === "SYNCED").length;
   const pending = plants.filter((plant) => ["LOCAL_ONLY", "DIRTY", "ERROR"].includes(plant.sync.state)).length;
@@ -1752,9 +1834,9 @@ function PlatformScreen({
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
       <DpnHeader
-        eyebrow="DPN PLANTPULSE // PLATFORM V0.10"
+        eyebrow="DPN PLANTPULSE // PLATFORM V0.11"
         title="DPN Platform"
-        subtitle="DPN Identity OIDC + PKCE, renewable secure sessions, signed media, synchronized plant records, device trust, and conflict recovery."
+        subtitle="DPN Identity, synchronized plant records, notification policy, trusted-device control, background operations, and observable delivery health."
       />
 
       <View style={styles.statGrid}>
@@ -1874,6 +1956,128 @@ function PlatformScreen({
         ) : null}
         {__DEV__ ? <SecondaryButton label="TRIGGER BACKGROUND SYNC TEST" onPress={onTestBackgroundSync} /> : null}
       </Card>
+
+      {authenticated && configured ? (
+        <>
+          <SectionTitle title="NOTIFICATION POLICY" action="SERVER ENFORCED" />
+          <Card style={styles.infoCard}>
+            {([
+              ["care", "CARE"],
+              ["prediction", "PREDICTION"],
+              ["sensor", "SENSOR"],
+              ["sync", "SYNC"],
+              ["security", "SECURITY"]
+            ] as Array<[keyof Pick<NotificationPreferences, "care" | "prediction" | "sensor" | "sync" | "security">, string]>).map(([key, label]) => (
+              <View key={key} style={styles.platformPlantRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.plantName}>{label}</Text>
+                  <Text style={styles.plantLatin}>Remote delivery {preferences[key] ? "enabled" : "suppressed"}</Text>
+                </View>
+                <Pressable
+                  style={preferences[key] ? styles.applyButton : styles.feedbackButton}
+                  onPress={() => setPreferences((current) => ({ ...current, [key]: !current[key] }))}
+                >
+                  <Text style={preferences[key] ? styles.applyButtonText : styles.feedbackButtonText}>
+                    {preferences[key] ? "ON" : "OFF"}
+                  </Text>
+                </Pressable>
+              </View>
+            ))}
+
+            <View style={styles.platformPlantRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.plantName}>QUIET HOURS</Text>
+                <Text style={styles.plantLatin}>Deferred, never discarded</Text>
+              </View>
+              <Pressable
+                style={preferences.quietHoursEnabled ? styles.applyButton : styles.feedbackButton}
+                onPress={() => setPreferences((current) => ({
+                  ...current,
+                  quietHoursEnabled: !current.quietHoursEnabled
+                }))}
+              >
+                <Text style={preferences.quietHoursEnabled ? styles.applyButtonText : styles.feedbackButtonText}>
+                  {preferences.quietHoursEnabled ? "ON" : "OFF"}
+                </Text>
+              </Pressable>
+            </View>
+
+            <Text style={styles.fieldLabel}>QUIET START // HH:MM</Text>
+            <TextInput
+              value={preferences.quietStart}
+              onChangeText={(quietStart) => setPreferences((current) => ({ ...current, quietStart }))}
+              autoCapitalize="none"
+              style={styles.editInput}
+            />
+            <Text style={styles.fieldLabel}>QUIET END // HH:MM</Text>
+            <TextInput
+              value={preferences.quietEnd}
+              onChangeText={(quietEnd) => setPreferences((current) => ({ ...current, quietEnd }))}
+              autoCapitalize="none"
+              style={styles.editInput}
+            />
+            <Text style={styles.fieldLabel}>TIME ZONE // IANA</Text>
+            <TextInput
+              value={preferences.timeZone}
+              onChangeText={(timeZone) => setPreferences((current) => ({ ...current, timeZone }))}
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={styles.editInput}
+            />
+            <PrimaryButton label="SAVE NOTIFICATION POLICY" onPress={() => onSaveNotificationPreferences(preferences)} />
+          </Card>
+
+          <SectionTitle title="DEVICE TRUST" action={(platformState.trustedDevices?.length ?? 0) + " DEVICES"} />
+          {(platformState.trustedDevices ?? []).length === 0 ? (
+            <Card><Text style={styles.emptyText}>No trusted device inventory has been loaded.</Text></Card>
+          ) : (platformState.trustedDevices ?? []).map((device) => {
+            const current = device.deviceId === platformState.device?.deviceId;
+            return (
+              <Card key={device.deviceId} style={styles.platformPlantRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.plantName}>{device.name}</Text>
+                  <Text style={styles.plantLatin}>
+                    {device.platform.toUpperCase()} • LAST SEEN {new Date(device.lastSeenAt).toLocaleString()}
+                  </Text>
+                  {device.revokedAt ? <Text style={styles.warningText}>REVOKED {new Date(device.revokedAt).toLocaleString()}</Text> : null}
+                </View>
+                <View style={styles.buttonStack}>
+                  <Pill label={current ? "CURRENT" : device.revokedAt ? "REVOKED" : "TRUSTED"} tone={device.revokedAt ? "red" : "green"} />
+                  {!current && !device.revokedAt ? (
+                    <Pressable style={styles.feedbackButton} onPress={() => onRevokeDevice(device.deviceId)}>
+                      <Text style={styles.feedbackButtonText}>REVOKE</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              </Card>
+            );
+          })}
+
+          <SectionTitle title="OPERATIONAL HEALTH" action="DURABLE TELEMETRY" />
+          <Card style={styles.infoCard}>
+            {platformState.operationalHealth ? (
+              <>
+                <View style={styles.platformMetricRow}>
+                  <Text style={styles.platformMetric}>PLANTS {platformState.operationalHealth.plantCount}</Text>
+                  <Text style={styles.platformMetric}>DEVICES {platformState.operationalHealth.activeDevices}</Text>
+                  <Text style={styles.platformMetric}>REVOKED {platformState.operationalHealth.revokedDevices}</Text>
+                </View>
+                <View style={styles.platformMetricRow}>
+                  <Text style={styles.platformMetric}>PENDING {platformState.operationalHealth.push.pending}</Text>
+                  <Text style={styles.platformMetric}>RETRY {platformState.operationalHealth.push.retry}</Text>
+                  <Text style={styles.platformMetric}>TICKETED {platformState.operationalHealth.push.ticketed}</Text>
+                  <Text style={styles.platformMetric}>DELIVERED {platformState.operationalHealth.push.delivered}</Text>
+                  <Text style={styles.platformMetric}>DEAD {platformState.operationalHealth.push.dead}</Text>
+                </View>
+                <Text style={styles.timelineDate}>
+                  GENERATED {new Date(platformState.operationalHealth.generatedAt).toLocaleString()}
+                </Text>
+              </>
+            ) : <Text style={styles.emptyText}>Operational telemetry has not been loaded.</Text>}
+            <SecondaryButton label="REFRESH PLATFORM OPERATIONS" onPress={onRefreshControlPlane} />
+          </Card>
+        </>
+      ) : null}
 
       {platformState.conflicts.length > 0 ? (
         <>

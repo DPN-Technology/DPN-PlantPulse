@@ -1,4 +1,10 @@
-import { Plant, PlatformNotification, RegisteredClientDevice } from "../types";
+import {
+  NotificationPreferences,
+  Plant,
+  PlatformNotification,
+  PlatformOperationalHealth,
+  RegisteredClientDevice
+} from "../types";
 
 export interface RemotePlantRecord {
   plant: Plant;
@@ -43,6 +49,11 @@ export interface PlatformApiClient {
   registerDevice(request: RegisterDeviceRequest): Promise<RegisteredClientDevice>;
   claimPlantTag(request: PlantTagClaimRequest): Promise<void>;
   queueNotifications(notifications: PlatformNotification[]): Promise<number>;
+  getNotificationPreferences(): Promise<NotificationPreferences>;
+  updateNotificationPreferences(preferences: NotificationPreferences): Promise<NotificationPreferences>;
+  listDevices(): Promise<RegisteredClientDevice[]>;
+  revokeDevice(deviceId: string): Promise<void>;
+  getOperationalHealth(): Promise<PlatformOperationalHealth>;
 }
 
 export class PlatformConflictError extends Error {
@@ -147,6 +158,40 @@ export class DpnPlatformApiClient implements PlatformApiClient {
     if (!response.ok) throw new Error("Plant tag claim failed with HTTP " + response.status);
   }
 
+  async getNotificationPreferences(): Promise<NotificationPreferences> {
+    const response = await this.request("/v1/notification-preferences");
+    if (!response.ok) throw new Error("Notification preferences failed with HTTP " + response.status);
+    return (await response.json()) as NotificationPreferences;
+  }
+
+  async updateNotificationPreferences(preferences: NotificationPreferences): Promise<NotificationPreferences> {
+    const response = await this.request("/v1/notification-preferences", {
+      method: "PUT",
+      body: JSON.stringify(preferences)
+    });
+    if (!response.ok) throw new Error("Notification preference update failed with HTTP " + response.status);
+    return (await response.json()) as NotificationPreferences;
+  }
+
+  async listDevices(): Promise<RegisteredClientDevice[]> {
+    const response = await this.request("/v1/devices");
+    if (!response.ok) throw new Error("Device trust list failed with HTTP " + response.status);
+    return (await response.json()) as RegisteredClientDevice[];
+  }
+
+  async revokeDevice(deviceId: string): Promise<void> {
+    const response = await this.request("/v1/devices/" + encodeURIComponent(deviceId), {
+      method: "DELETE"
+    });
+    if (!response.ok) throw new Error("Device revocation failed with HTTP " + response.status);
+  }
+
+  async getOperationalHealth(): Promise<PlatformOperationalHealth> {
+    const response = await this.request("/v1/operations/health");
+    if (!response.ok) throw new Error("Operational health failed with HTTP " + response.status);
+    return (await response.json()) as PlatformOperationalHealth;
+  }
+
   async queueNotifications(notifications: PlatformNotification[]): Promise<number> {
     if (!notifications.length) return 0;
     const response = await this.request("/v1/notifications/queue", {
@@ -179,4 +224,9 @@ export class UnconfiguredPlatformApiClient implements PlatformApiClient {
   async registerDevice(_request: RegisterDeviceRequest): Promise<RegisteredClientDevice> { return this.fail(); }
   async claimPlantTag(_request: PlantTagClaimRequest): Promise<void> { return this.fail(); }
   async queueNotifications(_notifications: PlatformNotification[]): Promise<number> { return this.fail(); }
+  async getNotificationPreferences(): Promise<NotificationPreferences> { return this.fail(); }
+  async updateNotificationPreferences(_preferences: NotificationPreferences): Promise<NotificationPreferences> { return this.fail(); }
+  async listDevices(): Promise<RegisteredClientDevice[]> { return this.fail(); }
+  async revokeDevice(_deviceId: string): Promise<void> { return this.fail(); }
+  async getOperationalHealth(): Promise<PlatformOperationalHealth> { return this.fail(); }
 }

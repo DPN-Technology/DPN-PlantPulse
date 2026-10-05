@@ -45,6 +45,32 @@ function stringField(
   return trimmed;
 }
 
+function booleanField(body: JsonObject, key: string): boolean {
+  const value = body[key];
+  if (typeof value !== "boolean") {
+    throw new RequestValidationError(key + " must be a boolean");
+  }
+  return value;
+}
+
+function clockField(body: JsonObject, key: string): string {
+  const value = stringField(body, key, 5, true)!;
+  if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value)) {
+    throw new RequestValidationError(key + " must use HH:MM 24-hour time");
+  }
+  return value;
+}
+
+function timeZoneField(body: JsonObject, key: string): string {
+  const value = stringField(body, key, 100, true)!;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value }).format(new Date());
+  } catch {
+    throw new RequestValidationError(key + " must be a valid IANA time zone");
+  }
+  return value;
+}
+
 function integerField(
   body: JsonObject,
   key: string,
@@ -119,7 +145,7 @@ export async function createPlatformApp(options: PlatformAppOptions) {
   app.get("/health", async () => ({
     service: "dpn-plantpulse-platform",
     status: "ok",
-    version: "0.10.0"
+    version: "0.11.0"
   }));
 
   app.get("/ready", async (_request, reply) => {
@@ -197,6 +223,24 @@ export async function createPlatformApp(options: PlatformAppOptions) {
     return reply.code(201).send(grant);
   });
 
+  app.get("/v1/devices", async (request, reply) => {
+    const auth = await requireAuth(request, reply, options.authVerifier);
+    if (!auth) return;
+    return options.repository.listDevices(auth.tenantId, auth.userId);
+  });
+
+  app.delete("/v1/devices/:deviceId", async (request, reply) => {
+    const auth = await requireAuth(request, reply, options.authVerifier);
+    if (!auth) return;
+    const params = request.params as { deviceId?: string };
+    const deviceId = params.deviceId?.trim();
+    if (!deviceId || deviceId.length > 160) {
+      throw new RequestValidationError("deviceId is invalid");
+    }
+    await options.repository.revokeDevice(auth.tenantId, auth.userId, deviceId);
+    return reply.code(204).send();
+  });
+
   app.post("/v1/devices", async (request, reply) => {
     const auth = await requireAuth(request, reply, options.authVerifier);
     if (!auth) return;
@@ -220,6 +264,61 @@ export async function createPlatformApp(options: PlatformAppOptions) {
     });
 
     return reply.code(201).send(device);
+  });
+
+  app.get("/v1/notification-preferences", async (request, reply) => {
+    const auth = await requireAuth(request, reply, options.authVerifier);
+    if (!auth) return;
+    if (!options.notificationRepository) {
+      return reply.code(503).send({ error: "notification_delivery_unavailable" });
+    }
+    return options.notificationRepository.getPreferences(auth.tenantId, auth.userId);
+  });
+
+  app.put("/v1/notification-preferences", async (request, reply) => {
+    const auth = await requireAuth(request, reply, options.authVerifier);
+    if (!auth) return;
+    if (!options.notificationRepository) {
+      return reply.code(503).send({ error: "notification_delivery_unavailable" });
+    }
+    if (!isRecord(request.body)) {
+      throw new RequestValidationError("request body must be an object");
+    }
+    const quietStart = clockField(request.body, "quietStart");
+    const quietEnd = clockField(request.body, "quietEnd");
+    if (quietStart === quietEnd) {
+      throw new RequestValidationError("quietStart and quietEnd must differ");
+    }
+    const preferences = await options.notificationRepository.updatePreferences(
+      auth.tenantId,
+      auth.userId,
+      {
+        care: booleanField(request.body, "care"),
+        prediction: booleanField(request.body, "prediction"),
+        sensor: booleanField(request.body, "sensor"),
+        sync: booleanField(request.body, "sync"),
+        security: booleanField(request.body, "security"),
+        quietHoursEnabled: booleanField(request.body, "quietHoursEnabled"),
+        quietStart,
+        quietEnd,
+        timeZone: timeZoneField(request.body, "timeZone")
+      }
+    );
+    return preferences;
+  });
+
+  app.get("/v1/operations/health", async (request, reply) => {
+    const auth = await requireAuth(request, reply, options.authVerifier);
+    if (!auth) return;
+    const core = await options.repository.getTenantOperationalHealth(auth.tenantId, auth.userId);
+    const push = options.notificationRepository
+      ? await options.notificationRepository.getDeliveryStats(auth.tenantId, auth.userId)
+      : { pending: 0, retry: 0, ticketed: 0, delivered: 0, dead: 0 };
+    return {
+      ...core,
+      push,
+      generatedAt: new Date().toISOString()
+    };
   });
 
   app.post("/v1/notifications/queue", async (request, reply) => {

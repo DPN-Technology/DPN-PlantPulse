@@ -1,6 +1,6 @@
 # DPN PlantPulse Platform Service
 
-This directory contains the v0.10 server implementation for the PlantPulse cloud/platform contract.
+This directory contains the v0.11 server implementation for the PlantPulse cloud/platform contract.
 
 ## Runtime
 
@@ -101,3 +101,12 @@ When enabled, the worker:
 8. removes stale push tokens after `DeviceNotRegistered`.
 
 Local Docker keeps the worker disabled unless explicitly enabled.
+
+
+## v0.11 notification policy and device trust
+
+Authenticated users can read/update server-side notification preferences, including per-category controls and quiet hours with an IANA timezone.
+
+Device enrollment is ownership-safe. A device ID cannot be silently reassigned to another user inside the same tenant. Revocation is sticky and clears push delivery trust.
+
+Operational health is available through `GET /v1/operations/health`, exposing durable plant/device/outbox counters to the authenticated user. Production metrics, tracing and SLO dashboards remain separate deployment work.

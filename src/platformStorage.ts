@@ -33,7 +33,10 @@ function normalizePlatformState(parsed: Partial<PlatformState>): PlatformState {
     lastSyncSummary: parsed.lastSyncSummary,
     syncAttempt: typeof parsed.syncAttempt === "number" ? parsed.syncAttempt : 0,
     nextRetryAt: parsed.nextRetryAt,
-    backgroundSync: parsed.backgroundSync
+    backgroundSync: parsed.backgroundSync,
+    notificationPreferences: parsed.notificationPreferences,
+    trustedDevices: Array.isArray(parsed.trustedDevices) ? parsed.trustedDevices : [],
+    operationalHealth: parsed.operationalHealth
   };
 }
 

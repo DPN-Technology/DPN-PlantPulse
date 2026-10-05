@@ -104,3 +104,21 @@ create unique index if not exists notification_outbox_source_device_uidx
 create index if not exists notification_outbox_due_idx
   on notification_outbox (status, next_attempt_at, created_at)
   where status in ('PENDING', 'RETRY', 'SENDING', 'TICKETED');
+
+
+create table if not exists notification_preferences (
+  tenant_id text not null,
+  user_id text not null,
+  care boolean not null default true,
+  prediction boolean not null default true,
+  sensor boolean not null default true,
+  sync boolean not null default true,
+  security boolean not null default true,
+  quiet_hours_enabled boolean not null default false,
+  quiet_start time not null default '22:00',
+  quiet_end time not null default '07:00',
+  timezone text not null default 'UTC',
+  updated_at timestamptz not null default now(),
+  primary key (tenant_id, user_id),
+  check (quiet_start <> quiet_end)
+);

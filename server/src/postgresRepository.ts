@@ -7,6 +7,7 @@ import {
   PushPlantInput,
   PushPlantResult,
   RegisteredDevice,
+  TenantOperationalHealth,
   ResourceConflictError,
   ResourceNotFoundError,
   RevisionConflictError
@@ -131,49 +132,143 @@ export class PostgresPlatformRepository implements PlatformRepository {
   }
 
   async registerDevice(input: DeviceRegistrationInput): Promise<RegisteredDevice> {
-    const now = new Date();
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const existing = await client.query<{ user_id: string; revoked_at: Date | null }>(
+        `select user_id, revoked_at
+           from client_devices
+          where tenant_id = $1 and device_id = $2
+          for update`,
+        [input.tenantId, input.deviceId]
+      );
+
+      if (existing.rowCount && existing.rows[0]!.user_id !== input.userId) {
+        throw new ResourceConflictError("Device ID is already enrolled by another user");
+      }
+      if (existing.rowCount && existing.rows[0]!.revoked_at) {
+        throw new ResourceConflictError("Device trust has been revoked and cannot be silently reactivated");
+      }
+
+      const result = await client.query<{
+        device_id: string;
+        name: string;
+        platform: string;
+        registered_at: Date;
+        last_seen_at: Date;
+        push_token: string | null;
+        revoked_at: Date | null;
+      }>(
+        `insert into client_devices (
+           tenant_id, user_id, device_id, name, platform, push_token,
+           registered_at, last_seen_at, revoked_at
+         ) values ($1, $2, $3, $4, $5, $6, now(), now(), null)
+         on conflict (tenant_id, device_id)
+         do update set
+           name = excluded.name,
+           platform = excluded.platform,
+           push_token = coalesce(excluded.push_token, client_devices.push_token),
+           last_seen_at = now()
+         returning device_id, name, platform, registered_at, last_seen_at, push_token, revoked_at`,
+        [
+          input.tenantId,
+          input.userId,
+          input.deviceId,
+          input.name,
+          input.platform,
+          input.pushToken ?? null
+        ]
+      );
+
+      const row = result.rows[0]!;
+      await this.audit(client, input.tenantId, input.userId, "device.register", input.deviceId, {
+        platform: input.platform,
+        existingDevice: Boolean(existing.rowCount)
+      });
+      await client.query("commit");
+
+      return {
+        deviceId: row.device_id,
+        name: row.name,
+        platform: row.platform,
+        registeredAt: row.registered_at.toISOString(),
+        lastSeenAt: row.last_seen_at.toISOString(),
+        ...(row.push_token ? { pushToken: row.push_token } : {}),
+        ...(row.revoked_at ? { revokedAt: row.revoked_at.toISOString() } : {})
+      };
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listDevices(tenantId: string, userId: string): Promise<RegisteredDevice[]> {
     const result = await this.pool.query<{
       device_id: string;
       name: string;
       platform: string;
       registered_at: Date;
       last_seen_at: Date;
-      push_token: string | null;
+      revoked_at: Date | null;
     }>(
-      `insert into client_devices (
-         tenant_id, user_id, device_id, name, platform, push_token, registered_at, last_seen_at
-       ) values ($1, $2, $3, $4, $5, $6, $7, $7)
-       on conflict (tenant_id, device_id)
-       do update set
-         user_id = excluded.user_id,
-         name = excluded.name,
-         platform = excluded.platform,
-         push_token = excluded.push_token,
-         last_seen_at = excluded.last_seen_at
-       returning device_id, name, platform, registered_at, last_seen_at, push_token`,
-      [
-        input.tenantId,
-        input.userId,
-        input.deviceId,
-        input.name,
-        input.platform,
-        input.pushToken ?? null,
-        now
-      ]
+      `select device_id, name, platform, registered_at, last_seen_at, revoked_at
+         from client_devices
+        where tenant_id = $1 and user_id = $2
+        order by coalesce(revoked_at, last_seen_at) desc`,
+      [tenantId, userId]
     );
 
-    const row = result.rows[0]!;
-    await this.audit(this.pool, input.tenantId, input.userId, "device.register", input.deviceId, {
-      platform: input.platform
-    });
-
-    return {
+    return result.rows.map((row) => ({
       deviceId: row.device_id,
       name: row.name,
       platform: row.platform,
       registeredAt: row.registered_at.toISOString(),
       lastSeenAt: row.last_seen_at.toISOString(),
-      ...(row.push_token ? { pushToken: row.push_token } : {})
+      ...(row.revoked_at ? { revokedAt: row.revoked_at.toISOString() } : {})
+    }));
+  }
+
+  async revokeDevice(tenantId: string, userId: string, deviceId: string): Promise<void> {
+    const result = await this.pool.query(
+      `update client_devices
+          set revoked_at = now(),
+              push_token = null
+        where tenant_id = $1
+          and user_id = $2
+          and device_id = $3
+          and revoked_at is null`,
+      [tenantId, userId, deviceId]
+    );
+
+    if ((result.rowCount ?? 0) === 0) {
+      throw new ResourceNotFoundError("Active device does not exist");
+    }
+
+    await this.audit(this.pool, tenantId, userId, "device.revoke", deviceId, {});
+  }
+
+  async getTenantOperationalHealth(tenantId: string, userId: string): Promise<TenantOperationalHealth> {
+    const [plants, devices] = await Promise.all([
+      this.pool.query<{ count: string }>(
+        "select count(*)::text as count from plants where tenant_id = $1",
+        [tenantId]
+      ),
+      this.pool.query<{ active: string; revoked: string }>(
+        `select
+           count(*) filter (where revoked_at is null)::text as active,
+           count(*) filter (where revoked_at is not null)::text as revoked
+         from client_devices
+         where tenant_id = $1 and user_id = $2`,
+        [tenantId, userId]
+      )
+    ]);
+
+    return {
+      plantCount: Number(plants.rows[0]?.count ?? 0),
+      activeDevices: Number(devices.rows[0]?.active ?? 0),
+      revokedDevices: Number(devices.rows[0]?.revoked ?? 0)
     };
   }
 

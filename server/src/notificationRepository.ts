@@ -3,7 +3,9 @@ import {
   NotificationDelivery,
   NotificationOutboxRepository,
   NotificationReceiptCandidate,
-  QueueNotificationsInput
+  QueueNotificationsInput,
+  NotificationPreferences,
+  NotificationDeliveryStats
 } from "./notificationTypes.js";
 
 export class PostgresNotificationOutboxRepository implements NotificationOutboxRepository {
@@ -39,10 +41,20 @@ export class PostgresNotificationOutboxRepository implements NotificationOutboxR
            $1, $2, d.device_id, $3, $4::jsonb, $5,
            'PENDING', 0, now(), now()
          from client_devices d
+         left join notification_preferences p
+           on p.tenant_id = d.tenant_id and p.user_id = d.user_id
          where d.tenant_id = $1
            and d.user_id = $2
            and d.push_token is not null
            and d.revoked_at is null
+           and case $3
+             when 'CARE' then coalesce(p.care, true)
+             when 'PREDICTION' then coalesce(p.prediction, true)
+             when 'SENSOR' then coalesce(p.sensor, true)
+             when 'SYNC' then coalesce(p.sync, true)
+             when 'SECURITY' then coalesce(p.security, true)
+             else false
+           end
          on conflict (tenant_id, user_id, device_id, source_id)
            where source_id is not null
          do nothing`,
@@ -87,10 +99,24 @@ export class PostgresNotificationOutboxRepository implements NotificationOutboxR
            join client_devices d
              on d.tenant_id = o.tenant_id
             and d.device_id = o.device_id
+           left join notification_preferences p
+             on p.tenant_id = o.tenant_id
+            and p.user_id = o.user_id
           where o.status in ('PENDING', 'RETRY', 'SENDING')
             and o.next_attempt_at <= now()
             and d.push_token is not null
             and d.revoked_at is null
+            and (
+              coalesce(p.quiet_hours_enabled, false) = false
+              or case
+                when p.quiet_start < p.quiet_end then
+                  ((now() at time zone coalesce(p.timezone, 'UTC'))::time < p.quiet_start
+                   or (now() at time zone coalesce(p.timezone, 'UTC'))::time >= p.quiet_end)
+                else
+                  ((now() at time zone coalesce(p.timezone, 'UTC'))::time >= p.quiet_end
+                   and (now() at time zone coalesce(p.timezone, 'UTC'))::time < p.quiet_start)
+              end
+            )
           order by o.next_attempt_at asc, o.created_at asc
           for update of o skip locked
           limit $1`,
@@ -250,4 +276,130 @@ export class PostgresNotificationOutboxRepository implements NotificationOutboxR
       [tenantId, deviceId, pushToken]
     );
   }
+
+  async getPreferences(tenantId: string, userId: string): Promise<NotificationPreferences> {
+    const result = await this.pool.query<{
+      care: boolean;
+      prediction: boolean;
+      sensor: boolean;
+      sync: boolean;
+      security: boolean;
+      quiet_hours_enabled: boolean;
+      quiet_start: string;
+      quiet_end: string;
+      timezone: string;
+      updated_at: Date;
+    }>(
+      `select care, prediction, sensor, sync, security,
+              quiet_hours_enabled, quiet_start::text, quiet_end::text,
+              timezone, updated_at
+         from notification_preferences
+        where tenant_id = $1 and user_id = $2`,
+      [tenantId, userId]
+    );
+
+    const row = result.rows[0];
+    if (!row) {
+      return {
+        care: true,
+        prediction: true,
+        sensor: true,
+        sync: true,
+        security: true,
+        quietHoursEnabled: false,
+        quietStart: "22:00",
+        quietEnd: "07:00",
+        timeZone: "UTC"
+      };
+    }
+
+    return {
+      care: row.care,
+      prediction: row.prediction,
+      sensor: row.sensor,
+      sync: row.sync,
+      security: row.security,
+      quietHoursEnabled: row.quiet_hours_enabled,
+      quietStart: row.quiet_start.slice(0, 5),
+      quietEnd: row.quiet_end.slice(0, 5),
+      timeZone: row.timezone,
+      updatedAt: row.updated_at.toISOString()
+    };
+  }
+
+  async updatePreferences(
+    tenantId: string,
+    userId: string,
+    preferences: NotificationPreferences
+  ): Promise<NotificationPreferences> {
+    const result = await this.pool.query<{ updated_at: Date }>(
+      `insert into notification_preferences (
+         tenant_id, user_id, care, prediction, sensor, sync, security,
+         quiet_hours_enabled, quiet_start, quiet_end, timezone, updated_at
+       ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9::time,$10::time,$11,now())
+       on conflict (tenant_id, user_id)
+       do update set
+         care = excluded.care,
+         prediction = excluded.prediction,
+         sensor = excluded.sensor,
+         sync = excluded.sync,
+         security = excluded.security,
+         quiet_hours_enabled = excluded.quiet_hours_enabled,
+         quiet_start = excluded.quiet_start,
+         quiet_end = excluded.quiet_end,
+         timezone = excluded.timezone,
+         updated_at = now()
+       returning updated_at`,
+      [
+        tenantId,
+        userId,
+        preferences.care,
+        preferences.prediction,
+        preferences.sensor,
+        preferences.sync,
+        preferences.security,
+        preferences.quietHoursEnabled,
+        preferences.quietStart,
+        preferences.quietEnd,
+        preferences.timeZone
+      ]
+    );
+
+    return {
+      ...preferences,
+      updatedAt: result.rows[0]!.updated_at.toISOString()
+    };
+  }
+
+  async getDeliveryStats(tenantId: string, userId: string): Promise<NotificationDeliveryStats> {
+    const result = await this.pool.query<{
+      pending: string;
+      retry: string;
+      ticketed: string;
+      delivered: string;
+      dead: string;
+      last_delivered_at: Date | null;
+    }>(
+      `select
+         count(*) filter (where status in ('PENDING','SENDING'))::text as pending,
+         count(*) filter (where status = 'RETRY')::text as retry,
+         count(*) filter (where status = 'TICKETED')::text as ticketed,
+         count(*) filter (where status = 'DELIVERED')::text as delivered,
+         count(*) filter (where status = 'DEAD')::text as dead,
+         max(delivered_at) as last_delivered_at
+       from notification_outbox
+       where tenant_id = $1 and user_id = $2`,
+      [tenantId, userId]
+    );
+    const row = result.rows[0]!;
+    return {
+      pending: Number(row.pending),
+      retry: Number(row.retry),
+      ticketed: Number(row.ticketed),
+      delivered: Number(row.delivered),
+      dead: Number(row.dead),
+      ...(row.last_delivered_at ? { lastDeliveredAt: row.last_delivered_at.toISOString() } : {})
+    };
+  }
+
 }

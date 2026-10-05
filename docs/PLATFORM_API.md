@@ -1,6 +1,6 @@
 # DPN PlantPulse Platform API
 
-PlantPulse v0.7 now includes a runnable server implementation of this authenticated cloud/platform contract while the mobile application remains offline-first.
+PlantPulse includes a runnable server implementation of this authenticated cloud/platform contract while the mobile application remains offline-first.
 
 ## Identity
 
@@ -12,7 +12,7 @@ The mobile application expects an external DPN identity flow to provide:
 - short-lived access token
 - expiration time
 
-v0.8 still does **not** collect passwords. On Android/iOS, an externally issued DPN access-token session can be stored with Expo SecureStore; bearer tokens remain excluded from AsyncStorage. Development builds can use the local server's development identity mode. Production authentication still requires DPN Identity / DPN One provisioning and a renewable sign-in flow.
+PlantPulse does **not** collect passwords. On Android/iOS, an externally issued DPN access-token session can be stored with Expo SecureStore; bearer tokens remain excluded from AsyncStorage. Development builds can use the local server's development identity mode. Production authentication still requires DPN Identity / DPN One provisioning and a renewable sign-in flow.
 
 ## Plant synchronization
 
@@ -209,3 +209,42 @@ The server never accepts another target user in the request. Tenant and user sco
 The PostgreSQL outbox fans notifications to enrolled devices with active push tokens and deduplicates by tenant/user/device/source ID.
 
 Push delivery uses ticket + receipt semantics. A successful send ticket is not treated as final delivery until its receipt is checked. Permanent failures are dead-lettered; transient failures retry with bounded exponential backoff; `DeviceNotRegistered` clears the corresponding stored push token.
+
+
+## v0.11 notification policy
+
+```text
+GET /v1/notification-preferences
+PUT /v1/notification-preferences
+```
+
+Notification policy is stored server-side per tenant/user. Categories are CARE, PREDICTION, SENSOR, SYNC and SECURITY.
+
+Quiet hours use an IANA timezone plus HH:MM start/end values. Disabled categories are blocked before outbox insertion. Quiet hours do not delete queued alerts; the PostgreSQL delivery lease excludes them until the quiet window ends.
+
+## v0.11 device trust
+
+```text
+GET    /v1/devices
+POST   /v1/devices
+DELETE /v1/devices/{deviceId}
+```
+
+A device ID already owned by another user in the same tenant cannot be taken over. Revocation is sticky: normal device registration cannot silently reactivate a revoked device ID.
+
+Device inventory responses intentionally omit stored push tokens.
+
+## v0.11 operational health
+
+```text
+GET /v1/operations/health
+```
+
+Returns authenticated durable counters for:
+
+- plant records
+- active and revoked devices
+- pending/retry/ticketed/delivered/dead push rows
+- last delivered push timestamp when available
+
+This is an operational control surface, not a replacement for production metrics/tracing. External latency/error histograms, traces and formal SLO dashboards remain production-readiness work.

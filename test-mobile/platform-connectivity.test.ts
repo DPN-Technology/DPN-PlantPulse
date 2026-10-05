@@ -79,6 +79,11 @@ class MediaApi implements PlatformApiClient {
   }
   async claimPlantTag(): Promise<void> {}
   async queueNotifications(): Promise<number> { return 0; }
+  async getNotificationPreferences() { throw new Error("unused"); }
+  async updateNotificationPreferences() { throw new Error("unused"); }
+  async listDevices() { throw new Error("unused"); }
+  async revokeDevice() { throw new Error("unused"); }
+  async getOperationalHealth() { throw new Error("unused"); }
 }
 
 test("pending local plant images are uploaded before cloud serialization", async () => {
@@ -135,7 +140,12 @@ test("sync captures remote snapshot and both conflict strategies are explicit", 
       throw new Error("unused");
     },
     async claimPlantTag() {},
-    async queueNotifications() { return 0; }
+    async queueNotifications() { return 0; },
+    async getNotificationPreferences() { throw new Error("unused"); },
+    async updateNotificationPreferences() { throw new Error("unused"); },
+    async listDevices() { throw new Error("unused"); },
+    async revokeDevice() { throw new Error("unused"); },
+    async getOperationalHealth() { throw new Error("unused"); }
   };
 
   const result = await synchronizePlants([local], api);

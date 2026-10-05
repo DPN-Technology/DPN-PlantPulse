@@ -2,7 +2,9 @@ import {
   NotificationDelivery,
   NotificationOutboxRepository,
   NotificationReceiptCandidate,
-  QueueNotificationsInput
+  QueueNotificationsInput,
+  NotificationPreferences,
+  NotificationDeliveryStats
 } from "./notificationTypes.js";
 
 interface MemoryRow {
@@ -25,6 +27,7 @@ export class InMemoryNotificationOutboxRepository implements NotificationOutboxR
   private readonly rows = new Map<string, MemoryRow>();
   private readonly devices = new Map<string, { tenantId: string; userId: string; deviceId: string; pushToken: string }>();
   private sequence = 0;
+  private readonly preferences = new Map<string, NotificationPreferences>();
 
   addDevice(tenantId: string, userId: string, deviceId: string, pushToken: string): void {
     this.devices.set(tenantId + ":" + deviceId, { tenantId, userId, deviceId, pushToken });
@@ -43,7 +46,14 @@ export class InMemoryNotificationOutboxRepository implements NotificationOutboxR
       (device) => device.tenantId === input.tenantId && device.userId === input.userId
     );
 
+    const preferences = await this.getPreferences(input.tenantId, input.userId);
     for (const item of input.items) {
+      const enabled = item.kind === "CARE" ? preferences.care
+        : item.kind === "PREDICTION" ? preferences.prediction
+        : item.kind === "SENSOR" ? preferences.sensor
+        : item.kind === "SYNC" ? preferences.sync
+        : preferences.security;
+      if (!enabled) continue;
       for (const device of devices) {
         const dedupe = input.tenantId + ":" + input.userId + ":" + device.deviceId + ":" + item.sourceId;
         if ([...this.rows.values()].some((row) =>
@@ -157,4 +167,48 @@ export class InMemoryNotificationOutboxRepository implements NotificationOutboxR
       this.devices.delete(key);
     }
   }
+
+  async getPreferences(tenantId: string, userId: string): Promise<NotificationPreferences> {
+    return structuredClone(this.preferences.get(tenantId + ":" + userId) ?? {
+      care: true,
+      prediction: true,
+      sensor: true,
+      sync: true,
+      security: true,
+      quietHoursEnabled: false,
+      quietStart: "22:00",
+      quietEnd: "07:00",
+      timeZone: "UTC"
+    });
+  }
+
+  async updatePreferences(
+    tenantId: string,
+    userId: string,
+    preferences: NotificationPreferences
+  ): Promise<NotificationPreferences> {
+    const next = { ...preferences, updatedAt: new Date().toISOString() };
+    this.preferences.set(tenantId + ":" + userId, next);
+    return structuredClone(next);
+  }
+
+  async getDeliveryStats(tenantId: string, userId: string): Promise<NotificationDeliveryStats> {
+    const rows = [...this.rows.values()].filter(
+      (row) => row.tenantId === tenantId && row.userId === userId
+    );
+    const lastDeliveredAt = rows
+      .filter((row) => row.status === "DELIVERED")
+      .map(() => new Date().toISOString())
+      .sort()
+      .at(-1);
+    return {
+      pending: rows.filter((row) => row.status === "PENDING" || row.status === "SENDING").length,
+      retry: rows.filter((row) => row.status === "RETRY").length,
+      ticketed: rows.filter((row) => row.status === "TICKETED").length,
+      delivered: rows.filter((row) => row.status === "DELIVERED").length,
+      dead: rows.filter((row) => row.status === "DEAD").length,
+      ...(lastDeliveredAt ? { lastDeliveredAt } : {})
+    };
+  }
+
 }

@@ -3,7 +3,7 @@ import test from "node:test";
 import { randomUUID } from "node:crypto";
 import { PostgresPlatformRepository } from "../src/postgresRepository.js";
 import { PostgresNotificationOutboxRepository } from "../src/notificationRepository.js";
-import { RevisionConflictError } from "../src/types.js";
+import { ResourceConflictError, RevisionConflictError } from "../src/types.js";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 
@@ -117,6 +117,120 @@ test("PostgreSQL notification outbox deduplicates and leases delivery work", { s
     assert.equal(receipts[0]!.pushTicketId, "ticket-1");
 
     await outbox.markDelivered(leased[0]!.id);
+  } finally {
+    await platform.close();
+    await outbox.close();
+  }
+});
+
+
+test("PostgreSQL device trust prevents takeover and sticky revocation", { skip: !databaseUrl }, async () => {
+  const repository = new PostgresPlatformRepository(databaseUrl!);
+  const tenantId = "device-tenant-" + randomUUID();
+  const deviceId = "device-" + randomUUID();
+
+  try {
+    await repository.registerDevice({
+      tenantId,
+      userId: "user-a",
+      deviceId,
+      name: "Phone",
+      platform: "android"
+    });
+
+    await assert.rejects(
+      repository.registerDevice({
+        tenantId,
+        userId: "user-b",
+        deviceId,
+        name: "Stolen Phone",
+        platform: "android"
+      }),
+      (error: unknown) => error instanceof ResourceConflictError
+    );
+
+    await repository.revokeDevice(tenantId, "user-a", deviceId);
+    const devices = await repository.listDevices(tenantId, "user-a");
+    assert.equal(devices.length, 1);
+    assert.ok(devices[0]!.revokedAt);
+
+    await assert.rejects(
+      repository.registerDevice({
+        tenantId,
+        userId: "user-a",
+        deviceId,
+        name: "Phone",
+        platform: "android"
+      }),
+      (error: unknown) => error instanceof ResourceConflictError
+    );
+  } finally {
+    await repository.close();
+  }
+});
+
+function utcClock(offsetMinutes: number): string {
+  const date = new Date(Date.now() + offsetMinutes * 60_000);
+  return String(date.getUTCHours()).padStart(2, "0") + ":" +
+    String(date.getUTCMinutes()).padStart(2, "0");
+}
+
+test("PostgreSQL notification policy suppresses categories and defers quiet-hour delivery", { skip: !databaseUrl }, async () => {
+  const platform = new PostgresPlatformRepository(databaseUrl!);
+  const outbox = new PostgresNotificationOutboxRepository(databaseUrl!);
+  const tenantId = "prefs-tenant-" + randomUUID();
+  const userId = "prefs-user-" + randomUUID();
+
+  try {
+    await platform.registerDevice({
+      tenantId,
+      userId,
+      deviceId: "phone-1",
+      name: "Phone",
+      platform: "android",
+      pushToken: "ExponentPushToken[test]"
+    });
+
+    await outbox.updatePreferences(tenantId, userId, {
+      care: false,
+      prediction: true,
+      sensor: true,
+      sync: true,
+      security: true,
+      quietHoursEnabled: true,
+      quietStart: utcClock(-60),
+      quietEnd: utcClock(60),
+      timeZone: "UTC"
+    });
+
+    assert.equal(await outbox.enqueueForUser({
+      tenantId,
+      userId,
+      items: [{ sourceId: "care-off", kind: "CARE", title: "Care", body: "Off" }]
+    }), 0);
+
+    assert.equal(await outbox.enqueueForUser({
+      tenantId,
+      userId,
+      items: [{ sourceId: "sensor-on", kind: "SENSOR", title: "Sensor", body: "On" }]
+    }), 1);
+
+    assert.equal((await outbox.leasePending(10)).length, 0);
+
+    const current = await outbox.getPreferences(tenantId, userId);
+    await outbox.updatePreferences(tenantId, userId, {
+      ...current,
+      quietHoursEnabled: false
+    });
+
+    const leased = await outbox.leasePending(10);
+    assert.equal(leased.length, 1);
+    await outbox.markDelivered(leased[0]!.id);
+
+    const stats = await outbox.getDeliveryStats(tenantId, userId);
+    assert.equal(stats.delivered, 1);
+    assert.equal(stats.pending, 0);
+    assert.ok(stats.lastDeliveredAt);
   } finally {
     await platform.close();
     await outbox.close();
