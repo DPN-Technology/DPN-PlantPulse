@@ -12,7 +12,7 @@ The mobile application expects an external DPN identity flow to provide:
 - short-lived access token
 - expiration time
 
-The current app does **not** implement password collection and does not persist bearer tokens in AsyncStorage. Production authentication should integrate DPN identity / DPN One and a platform secure credential store.
+v0.8 still does **not** collect passwords. On Android/iOS, an externally issued DPN access-token session can be stored with Expo SecureStore; bearer tokens remain excluded from AsyncStorage. Development builds can use the local server's development identity mode. Production authentication still requires DPN Identity / DPN One provisioning and a renewable sign-in flow.
 
 ## Plant synchronization
 
@@ -101,7 +101,7 @@ Response:
 }
 ```
 
-The mobile cloud serializer removes local image paths unless a real `cloudImageKey` exists. v0.6 defines the upload-grant contract but does not pretend the binary upload pipeline or object store is already deployed.
+The mobile cloud serializer removes local image paths unless a real `cloudImageKey` exists. v0.8 now executes the signed binary PUT from the mobile client, persists the returned object key, and marks the plant dirty so that key is written to PostgreSQL on the next record push. Production bucket policy/KMS and server-side completion verification remain deployment work.
 
 ## Client device registration
 
@@ -175,3 +175,20 @@ The implementation lives under `server/`:
 - `test/postgres.test.ts` — real PostgreSQL revision tests
 
 Production provisioning remains separate from implementation. The code does not embed credentials or a hard-coded production endpoint.
+
+
+## v0.8 mobile execution
+
+The mobile runtime now drives the v0.7 service contract directly:
+
+1. Restore an authenticated session from native SecureStore when available.
+2. Upload pending local image bytes through a signed media grant.
+3. Mark cloud-media metadata as a local record change.
+4. Pull remote plant revisions.
+5. Detect divergent records and retain a remote snapshot for review.
+6. Push eligible cloud-safe records.
+7. Claim unclaimed PlantPulse tags.
+8. Enroll the stable client device and optional Expo push token.
+9. Persist sync summary/retry metadata without persisting the bearer token.
+
+A conflict can be resolved explicitly by rebasing the local record onto the latest remote revision (**KEEP LOCAL**) or by replacing the local record with the captured remote snapshot (**USE REMOTE**).
