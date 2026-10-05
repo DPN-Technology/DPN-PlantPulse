@@ -72,6 +72,7 @@ The repository now contains the Expo / React Native client plus a runnable DPN P
 - Fastify / Node 22 DPN Platform service
 - PostgreSQL plant/device/tag/audit persistence
 - server-side optimistic concurrency with stale-write rejection
+- authenticated API rate limiting with HTTP 429 enforcement
 - JWKS JWT identity verification
 - S3-compatible signed image upload grants
 - backend API + PostgreSQL integration tests
