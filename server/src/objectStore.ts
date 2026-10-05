@@ -88,11 +88,7 @@ export class S3ObjectStore implements ObjectStore {
       Bucket: this.bucket,
       Key: objectKey,
       ContentType: input.contentType,
-      ContentLength: input.byteLength,
-      Metadata: {
-        "dpn-upload-id": input.uploadId,
-        "dpn-media-kind": input.mediaKind
-      }
+      ContentLength: input.byteLength
     });
 
     const uploadUrl = await getSignedUrl(this.client, command, {
