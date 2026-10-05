@@ -248,3 +248,51 @@ Returns authenticated durable counters for:
 - last delivered push timestamp when available
 
 This is an operational control surface, not a replacement for production metrics/tracing. External latency/error histograms, traces and formal SLO dashboards remain production-readiness work.
+
+
+## v0.12 observability and reliability
+
+```text
+GET  /metrics
+GET  /control/health
+POST /v1/operations/sync-report
+```
+
+### Prometheus metrics
+
+`/metrics` exports Prometheus text format without tenant/user/device identifiers in labels. Current custom metrics include:
+
+- HTTP request counts by bounded route/method/status
+- HTTP request-duration histogram
+- authentication failures
+- optimistic revision conflicts
+- push delivery lifecycle outcomes
+- push worker cycles
+- foreground/background sync reports
+- synchronization conflicts
+- dependency readiness
+
+Node/process metrics are exported under the `dpn_plantpulse_node_` prefix.
+
+The metrics endpoint is intended for an internal monitoring/network boundary. Production ingress should not expose it unnecessarily to the public internet.
+
+### Client operation reports
+
+After an enrolled device completes a sync cycle it can submit a bounded reliability report. The reporting device must already belong to the authenticated user and must not be revoked.
+
+Only the latest report for each tenant/user/device/operation is retained in `client_operation_reports`. Older out-of-order reports cannot overwrite newer evidence.
+
+### DPN Operational Control health
+
+`/control/health` is a non-secret, service-level health feed containing:
+
+- product / integration identity
+- version
+- ONLINE / DEGRADED service state
+- dependency readiness
+- rolling reliability evidence
+- SLO targets and current process-window evaluation
+
+It intentionally contains no tenant, user, plant or device identifiers.
+
+The repository also declares `.dpn/operational-control.json` using the DPN Operational Control schema v1.0.
