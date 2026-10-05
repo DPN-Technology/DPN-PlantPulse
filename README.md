@@ -6,7 +6,7 @@
 <p align="center">
   <img alt="DPN Technology" src="https://img.shields.io/badge/DPN-Technology-070707?style=flat-square&logo=github">
   <img alt="PlantPulse" src="https://img.shields.io/badge/PlantPulse-Biological%20Intelligence-19C864?style=flat-square">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.8.0-19C864?style=flat-square">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.9.0-19C864?style=flat-square">
   <img alt="Security" src="https://img.shields.io/badge/security-CodeQL%20%2B%20CI-E50914?style=flat-square">
   <img alt="Status" src="https://img.shields.io/badge/status-Active%20Development-19C864?style=flat-square">
 </p>
@@ -70,6 +70,7 @@ It is **not** intended to be a branded clone of an existing plant identifier.
 | **Signed media sync** | ✅ Implemented | signed PUT upload path, cloud object keys, media deduplication |
 | **Conflict recovery** | ✅ Implemented | explicit **KEEP LOCAL** / **USE REMOTE** resolution |
 | **Native secret storage** | ✅ Implemented | Expo SecureStore on Android/iOS |
+| **DPN OIDC client** | ✅ Implemented | discovery, Authorization Code + PKCE, UserInfo, refresh and revocation lifecycle |
 | **Push enrollment** | 🟡 Client scaffold | permission flow + token/device enrollment; remote delivery worker still pending |
 | **Production botanical AI** | ⛔ Not claimed | production model training/calibration remains future work |
 | **Production DPN cloud deployment** | ⛔ Not claimed | production identity, managed DB/storage, DNS/TLS/gateway remain provisioning work |
@@ -234,7 +235,7 @@ DPN PlantPulse is designed so product polish does not hide engineering boundarie
 
 ### Not yet represented as production-complete
 
-- production DPN One / OIDC login;
+- production DPN One authorization-server deployment / client registration;
 - renewable token refresh + revocation UX;
 - production PostgreSQL deployment;
 - production object-storage bucket/KMS policy;
@@ -335,10 +336,14 @@ Copy **.env.example** and configure public build-time values only:
 
 ```text
 EXPO_PUBLIC_DPN_PLATFORM_BASE_URL=
+EXPO_PUBLIC_DPN_IDENTITY_ISSUER=
+EXPO_PUBLIC_DPN_IDENTITY_CLIENT_ID=
+EXPO_PUBLIC_DPN_IDENTITY_SCOPES=openid profile email offline_access
+EXPO_PUBLIC_DPN_IDENTITY_TENANT_CLAIM=tenant_id
 EXPO_PUBLIC_EAS_PROJECT_ID=
 ```
 
-> Never place access tokens, refresh tokens, private keys, database passwords, object-store credentials, or other secrets in EXPO_PUBLIC variables.
+> Never place client secrets, access tokens, refresh tokens, private keys, database passwords, object-store credentials, or other secrets in EXPO_PUBLIC variables. The OIDC client ID is public; a mobile client secret is intentionally not used.
 
 ---
 
@@ -426,8 +431,8 @@ No red gate is treated as cosmetic.
 
 The next production-readiness priorities are:
 
-1. **DPN Identity / OIDC sign-in** — real DPN One identity flow instead of development identity.
-2. **Renewable session lifecycle** — refresh, revocation and device trust.
+1. **DPN One identity deployment** — provision the authorization server/client registration that the v0.9 OIDC client is ready to use.
+2. **Identity operations** — key rotation, client registration policy, revocation evidence and device trust.
 3. **Background synchronization** — native OS task scheduling rather than foreground-only retry.
 4. **Remote push delivery** — server-side outbox worker/provider.
 5. **Media verification** — server-side completion and object validation.
@@ -435,7 +440,8 @@ The next production-readiness priorities are:
 7. **Production Plant Intelligence** — trained/calibrated botanical models and verified safety knowledge.
 
 Full engineering roadmap: [docs/ROADMAP.md](docs/ROADMAP.md)  
-Production-readiness gate: [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md)
+Production-readiness gate: [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md)  
+DPN Identity / OIDC client: [docs/OIDC_IDENTITY.md](docs/OIDC_IDENTITY.md)
 
 ---
 
