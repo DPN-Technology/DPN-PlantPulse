@@ -236,8 +236,32 @@ See [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md) for the evidence gate.
 - [x] PostgreSQL outbox integration test
 - [ ] signed physical-device background execution proof
 - [ ] production push credential validation
-- [ ] notification preference center
-- [ ] delivery metrics/SLO dashboard
+- [x] notification preference center
+- [x] authenticated durable delivery-health counters
+- [ ] external metrics/traces/SLO dashboard
+
+## v0.11 — Notification policy + device trust + observability
+- [x] server-side category preferences
+- [x] CARE / PREDICTION / SENSOR / SYNC / SECURITY controls
+- [x] quiet hours
+- [x] IANA timezone validation
+- [x] quiet-hour delivery deferral
+- [x] notification policy mobile control surface
+- [x] trusted-device inventory
+- [x] cross-user device-ID takeover protection
+- [x] sticky device revocation
+- [x] remote device revoke API
+- [x] revoked push-token invalidation
+- [x] authenticated operational-health endpoint
+- [x] plant/device/outbox durable counters
+- [x] v0.11 mobile operational health panel
+- [x] API tests for notification policy and device trust
+- [x] PostgreSQL tests for category suppression and quiet-hour deferral
+- [ ] production metrics exporter / trace backend
+- [ ] API latency/error histograms
+- [ ] push delivery SLO dashboards
+- [ ] background-sync failure SLO
+- [ ] administrative device reactivation workflow with stronger proof
 
 ## Product families
 - PlantPulse Home
