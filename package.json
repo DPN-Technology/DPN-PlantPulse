@@ -1,6 +1,6 @@
 {
   "name": "dpn-plantpulse",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
@@ -9,7 +9,11 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "doctor": "expo-doctor"
+    "doctor": "expo-doctor",
+    "server:typecheck": "npm run typecheck --workspace @dpn/plantpulse-platform",
+    "server:test": "npm run test --workspace @dpn/plantpulse-platform",
+    "server:build": "npm run build --workspace @dpn/plantpulse-platform",
+    "server:migrate": "npm run db:migrate --workspace @dpn/plantpulse-platform"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -25,5 +29,8 @@
   },
   "engines": {
     "node": ">=22.13.0"
-  }
+  },
+  "workspaces": [
+    "server"
+  ]
 }
