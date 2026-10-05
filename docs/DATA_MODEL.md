@@ -1,6 +1,6 @@
 # DPN PlantPulse Data Model
 
-PlantPulse v0.4 maintains a versioned persistent longitudinal plant record.
+PlantPulse maintains a versioned persistent longitudinal plant record plus a separate v0.8 platform-connectivity state.
 
 ## Plant
 
@@ -58,6 +58,16 @@ user marks WATERED
 ```
 
 The same pattern is used for feeding. Pruning and inspections create durable timeline events without changing watering or feeding schedules.
+
+## Platform connectivity state
+
+Platform metadata is stored separately under:
+
+```text
+@dpn_plantpulse/platform/v2
+```
+
+It may contain the platform endpoint, device registration metadata, conflict snapshots, notification state, claimed tag IDs, last sync summary, and retry timing. Bearer tokens are deliberately removed before this state is written to AsyncStorage. Native access-token persistence uses Expo SecureStore instead.
 
 ## Local persistence
 
