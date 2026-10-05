@@ -41,6 +41,10 @@ DPN_TENANT_CLAIM=tenant_id
 
 JWT signatures are validated against the configured remote JWKS and both issuer and audience are enforced.
 
+## Rate limiting
+
+The service registers `@fastify/rate-limit` before the API routes. The default is 120 requests per minute with standard rate-limit headers. GitHub Advanced Security checks the authenticated routes for rate limiting, and the integration suite verifies HTTP 429 behavior.
+
 ## Database
 
 Apply the schema with:
