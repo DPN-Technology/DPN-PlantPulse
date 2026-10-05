@@ -243,8 +243,7 @@ export class PostgresNotificationOutboxRepository implements NotificationOutboxR
   async disablePushToken(tenantId: string, deviceId: string, pushToken: string): Promise<void> {
     await this.pool.query(
       `update client_devices
-          set push_token = null,
-              revoked_at = coalesce(revoked_at, now())
+          set push_token = null
         where tenant_id = $1
           and device_id = $2
           and push_token = $3`,
