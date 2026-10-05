@@ -17,6 +17,13 @@ export type PushMetricOutcome =
   | "provider_error";
 export type SyncMetricSource = "FOREGROUND" | "BACKGROUND";
 export type SyncMetricResult = "SUCCESS" | "FAILED" | "SKIPPED";
+export type MediaMetricOutcome =
+  | "reserved"
+  | "verified"
+  | "verification_failed"
+  | "deleted"
+  | "cleanup_deleted"
+  | "cleanup_retry";
 
 export interface ReliabilitySloTargets {
   availabilityPercent: number;
@@ -51,6 +58,14 @@ export interface ReliabilitySnapshot {
     invalidDevice: number;
     providerErrors: number;
     terminalSuccessPercent?: number;
+  };
+  media: {
+    reserved: number;
+    verified: number;
+    verificationFailed: number;
+    deleted: number;
+    cleanupDeleted: number;
+    cleanupRetry: number;
   };
   sync: {
     foregroundSuccess: number;
@@ -163,6 +178,12 @@ export class PlantPulseObservability implements PushReliabilityObserver {
     help: "Client synchronization conflicts reported to the platform",
     registers: [this.registry]
   });
+  private readonly mediaEvents = new Counter({
+    name: "dpn_plantpulse_media_events_total",
+    help: "Cloud media lifecycle events",
+    labelNames: ["outcome"] as const,
+    registers: [this.registry]
+  });
   private readonly dependencyReady = new Gauge({
     name: "dpn_plantpulse_dependency_ready",
     help: "Dependency readiness where 1 is ready and 0 is unavailable",
@@ -184,6 +205,14 @@ export class PlantPulseObservability implements PushReliabilityObserver {
     invalid_device: 0,
     provider_error: 0
   };
+  private mediaCounts: Record<MediaMetricOutcome, number> = {
+    reserved: 0,
+    verified: 0,
+    verification_failed: 0,
+    deleted: 0,
+    cleanup_deleted: 0,
+    cleanup_retry: 0
+  };
   private foregroundSuccess = 0;
   private foregroundFailed = 0;
   private backgroundSuccess = 0;
@@ -193,7 +222,7 @@ export class PlantPulseObservability implements PushReliabilityObserver {
   private readonly readinessState = new Map<string, boolean>();
 
   constructor(
-    readonly version = "0.12.0",
+    readonly version = "0.13.0",
     targets: ReliabilitySloTargets = DEFAULT_SLO_TARGETS
   ) {
     this.targets = targets;
@@ -248,6 +277,11 @@ export class PlantPulseObservability implements PushReliabilityObserver {
 
   recordPushWorkerCycle(result: "SUCCESS" | "FAILED"): void {
     this.pushWorkerCycles.inc({ result });
+  }
+
+  recordMediaOutcome(outcome: MediaMetricOutcome): void {
+    this.mediaEvents.inc({ outcome });
+    this.mediaCounts[outcome] += 1;
   }
 
   recordSyncReport(
@@ -336,6 +370,14 @@ export class PlantPulseObservability implements PushReliabilityObserver {
         ...(pushTerminalSuccessPercent !== undefined
           ? { terminalSuccessPercent: pushTerminalSuccessPercent }
           : {})
+      },
+      media: {
+        reserved: this.mediaCounts.reserved,
+        verified: this.mediaCounts.verified,
+        verificationFailed: this.mediaCounts.verification_failed,
+        deleted: this.mediaCounts.deleted,
+        cleanupDeleted: this.mediaCounts.cleanup_deleted,
+        cleanupRetry: this.mediaCounts.cleanup_retry
       },
       sync: {
         foregroundSuccess: this.foregroundSuccess,
