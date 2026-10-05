@@ -21,6 +21,10 @@ export interface PlatformConfig {
     batchSize: number;
     receiptDelayMs: number;
   };
+  observability: {
+    metricsEnabled: boolean;
+    controlHealthEnabled: boolean;
+  };
   objectStore: {
     region: string;
     bucket: string;
@@ -79,6 +83,10 @@ export function loadConfig(): PlatformConfig {
       workerIntervalMs: positiveInt("PUSH_WORKER_INTERVAL_MS", 15000),
       batchSize: Math.min(100, positiveInt("PUSH_WORKER_BATCH_SIZE", 50)),
       receiptDelayMs: positiveInt("PUSH_RECEIPT_DELAY_MS", 15 * 60 * 1000)
+    },
+    observability: {
+      metricsEnabled: process.env.METRICS_ENABLED !== "false",
+      controlHealthEnabled: process.env.DPN_CONTROL_HEALTH_ENABLED !== "false"
     },
     objectStore: {
       region: process.env.S3_REGION?.trim() || "us-east-1",
