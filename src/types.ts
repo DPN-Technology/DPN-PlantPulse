@@ -225,11 +225,17 @@ export interface DpnIdentityProfile {
   tenantId?: string;
 }
 
+export type IdentityProvider = "development" | "oidc";
+
 export interface DpnIdentitySession {
   status: IdentityStatus;
+  provider?: IdentityProvider;
   profile?: DpnIdentityProfile;
   accessToken?: string;
+  refreshToken?: string;
   expiresAt?: string;
+  tokenType?: string;
+  scope?: string;
 }
 
 export interface RegisteredClientDevice {
