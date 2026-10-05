@@ -86,14 +86,14 @@ function validatePlantPayload(plantId: string, plant: unknown): JsonObject {
   return plant;
 }
 
-export function createPlatformApp(options: PlatformAppOptions) {
+export async function createPlatformApp(options: PlatformAppOptions) {
   const app = Fastify({
     logger: options.logger ?? false,
     bodyLimit: 2 * 1024 * 1024,
     requestIdHeader: "x-request-id"
   });
 
-  app.register(rateLimit, {
+  await app.register(rateLimit, {
     global: true,
     max: options.rateLimitMax ?? 120,
     timeWindow: options.rateLimitTimeWindow ?? "1 minute",
