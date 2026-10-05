@@ -30,6 +30,11 @@ import {
 } from "./src/plantService";
 import { plantIntelligenceClient } from "./src/services/plantIntelligence";
 import { getSpeciesCareBaseline } from "./src/speciesCare";
+import {
+  acknowledgeSensorAlert,
+  buildSensorNetworkSnapshot,
+  sensorStatus
+} from "./src/sensors";
 import { loadPlants, savePlants } from "./src/storage";
 import { colors, radius } from "./src/theme";
 import {
@@ -38,6 +43,8 @@ import {
   Plant,
   PlantProfileUpdate,
   RecommendationFeedbackValue,
+  SensorMetric,
+  SensorReading,
   ScanMode,
   ScanResult,
   Screen
@@ -183,6 +190,10 @@ export default function App() {
     updatePlantRecord(plantId, (plant) => applyCareRecommendation(plant, recommendation));
   };
 
+  const acknowledgeAlert = (plantId: string, alertId: string) => {
+    updatePlantRecord(plantId, (plant) => acknowledgeSensorAlert(plant, alertId));
+  };
+
   const averageScore = Math.round(plants.reduce((sum, plant) => sum + plant.healthScore, 0) / Math.max(1, plants.length));
   const attention = plants.filter((plant) => plant.healthScore < 75);
   const dueCare = plants.filter((plant) => daysUntil(plant.nextWaterAt) <= 1 || daysUntil(plant.nextFeedAt) <= 1);
@@ -230,6 +241,7 @@ export default function App() {
           onUpdate={savePlantProfile}
           onRecommendationFeedback={feedbackRecommendation}
           onApplyRecommendation={applyRecommendation}
+          onAcknowledgeSensorAlert={acknowledgeAlert}
         />
       );
     }
@@ -243,6 +255,10 @@ export default function App() {
           onApplyRecommendation={applyRecommendation}
         />
       );
+    }
+
+    if (screen === "sensors") {
+      return <SensorNetworkScreen plants={plants} onAcknowledge={acknowledgeAlert} />;
     }
 
     if (screen === "ai") {
@@ -843,7 +859,8 @@ function PlantScreen({
   onCare,
   onUpdate,
   onRecommendationFeedback,
-  onApplyRecommendation
+  onApplyRecommendation,
+  onAcknowledgeSensorAlert
 }: {
   plant: Plant;
   onBack: () => void;
@@ -851,6 +868,7 @@ function PlantScreen({
   onUpdate: (plantId: string, update: PlantProfileUpdate) => void;
   onRecommendationFeedback: (plantId: string, recommendationId: string, value: RecommendationFeedbackValue) => void;
   onApplyRecommendation: (plantId: string, recommendation: CareRecommendation) => void;
+  onAcknowledgeSensorAlert: (plantId: string, alertId: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [nickname, setNickname] = useState(plant.nickname);
@@ -860,6 +878,7 @@ function PlantScreen({
   const [notes, setNotes] = useState(plant.notes ?? "");
   const intelligence = useMemo(() => buildCareIntelligence(plant), [plant]);
   const speciesBaseline = useMemo(() => getSpeciesCareBaseline(plant), [plant]);
+  const sensorSnapshot = useMemo(() => buildSensorNetworkSnapshot(plant), [plant]);
 
   useEffect(() => {
     setNickname(plant.nickname);
@@ -1015,6 +1034,37 @@ function PlantScreen({
         </Card>
       ) : null}
 
+      <SectionTitle title="SENSOR TELEMETRY" action={plant.sensorDevices.length + " DEVICES"} />
+      <Card style={styles.sensorPanel}>
+        {plant.sensorDevices.length === 0 ? (
+          <>
+            <Text style={styles.infoTitle}>NO HARDWARE CONNECTED</Text>
+            <Text style={styles.infoBody}>The v0.5 telemetry pipeline is ready for Wi-Fi gateway ingestion and a future native BLE adapter. No simulated sensor readings are shown as real data.</Text>
+          </>
+        ) : (
+          <>
+            <View style={styles.sensorSummaryRow}>
+              <Text style={styles.sensorSummary}>ONLINE {sensorSnapshot.online}</Text>
+              <Text style={styles.sensorSummary}>STALE {sensorSnapshot.stale}</Text>
+              <Text style={styles.sensorSummary}>OFFLINE {sensorSnapshot.offline}</Text>
+              <Text style={styles.sensorSummary}>ALERTS {sensorSnapshot.alertCount}</Text>
+            </View>
+            <TelemetryGrid readings={sensorSnapshot.latestReadings} />
+            {plant.sensorAlerts.filter((alert) => !alert.acknowledgedAt).slice(0, 4).map((alert) => (
+              <View key={alert.id} style={styles.sensorAlertRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.sensorAlertTitle}>{alert.severity} // {alert.title}</Text>
+                  <Text style={styles.sensorAlertDetail}>{alert.detail}</Text>
+                </View>
+                <Pressable style={styles.feedbackButton} onPress={() => onAcknowledgeSensorAlert(plant.id, alert.id)}>
+                  <Text style={styles.feedbackButtonText}>ACK</Text>
+                </Pressable>
+              </View>
+            ))}
+          </>
+        )}
+      </Card>
+
       <SectionTitle title="SCAN HISTORY" action={plant.scanHistory.length + " SAVED"} />
       <Card>
         {plant.scanHistory.length === 0 ? (
@@ -1147,6 +1197,141 @@ function CareScreen({
         <Text style={styles.infoTitle}>ADVISORY / EXPLAINABLE BY DESIGN</Text>
         <Text style={styles.infoBody}>PlantPulse v0.4 never treats photo-derived hydration as real soil moisture and never changes a schedule silently. Adaptive changes require an explicit APPLY action and remain visible in the timeline.</Text>
       </Card>
+    </ScrollView>
+  );
+}
+
+function metricLabel(metric: SensorMetric): string {
+  const labels: Record<SensorMetric, string> = {
+    soilMoisture: "SOIL MOISTURE",
+    soilTemperature: "SOIL TEMP",
+    airTemperature: "AIR TEMP",
+    humidity: "HUMIDITY",
+    light: "LIGHT",
+    ec: "EC",
+    ph: "PH"
+  };
+  return labels[metric];
+}
+
+function readingText(reading: SensorReading): string {
+  return reading.value + " " + reading.unit;
+}
+
+function TelemetryGrid({ readings }: { readings: Partial<Record<SensorMetric, SensorReading>> }) {
+  const metrics: SensorMetric[] = ["soilMoisture", "soilTemperature", "airTemperature", "humidity", "light", "ec", "ph"];
+  const available = metrics.filter((metric) => Boolean(readings[metric]));
+
+  if (!available.length) {
+    return <Text style={styles.emptyText}>No valid measured telemetry has been received yet.</Text>;
+  }
+
+  return (
+    <View style={styles.telemetryGrid}>
+      {available.map((metric) => {
+        const reading = readings[metric]!;
+        return (
+          <View key={metric} style={styles.telemetryTile}>
+            <Text style={styles.telemetryLabel}>{metricLabel(metric)}</Text>
+            <Text style={styles.telemetryValue}>{readingText(reading)}</Text>
+            <Text style={styles.telemetryMeta}>MEASURED • {reading.quality}</Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function SensorNetworkScreen({
+  plants,
+  onAcknowledge
+}: {
+  plants: Plant[];
+  onAcknowledge: (plantId: string, alertId: string) => void;
+}) {
+  const plantNetworks = plants.map((plant) => ({
+    plant,
+    snapshot: buildSensorNetworkSnapshot(plant)
+  }));
+  const totalDevices = plants.reduce((sum, plant) => sum + plant.sensorDevices.length, 0);
+  const totalAlerts = plants.reduce(
+    (sum, plant) => sum + plant.sensorAlerts.filter((alert) => !alert.acknowledgedAt).length,
+    0
+  );
+
+  return (
+    <ScrollView contentContainerStyle={styles.scroll}>
+      <DpnHeader
+        eyebrow="DPN PLANTPULSE // SENSOR NETWORK V0.5"
+        title="Sensor Network"
+        subtitle="Measured plant telemetry, device health, gateway ingestion, and anomaly visibility."
+      />
+
+      <View style={styles.statGrid}>
+        <Card style={styles.statCard}>
+          <Text style={styles.statLabel}>DEVICES</Text>
+          <Text style={styles.statValue}>{totalDevices}</Text>
+          <Text style={styles.statMeta}>REGISTERED</Text>
+        </Card>
+        <Card style={styles.statCard}>
+          <Text style={styles.statLabel}>OPEN ALERTS</Text>
+          <Text style={[styles.statValue, totalAlerts > 0 && { color: colors.amber }]}>{totalAlerts}</Text>
+          <Text style={styles.statMeta}>SENSOR HEALTH</Text>
+        </Card>
+        <Card style={styles.statCard}>
+          <Text style={styles.statLabel}>TRANSPORTS</Text>
+          <Text style={styles.statValue}>2</Text>
+          <Text style={styles.statMeta}>BLE + WIFI</Text>
+        </Card>
+      </View>
+
+      <Card style={styles.infoCard}>
+        <Text style={styles.infoTitle}>HARDWARE BOUNDARY</Text>
+        <Text style={styles.infoBody}>Wi-Fi gateway ingestion has a real HTTP client contract. Direct BLE has a native adapter contract but is not falsely marked operational in Expo Go; a native BLE implementation/dev build is still required.</Text>
+      </Card>
+
+      {plantNetworks.map(({ plant, snapshot }) => (
+        <Card key={plant.id} style={styles.sensorPlantCard}>
+          <View style={styles.sensorPlantTop}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.plantName}>{plant.nickname}</Text>
+              <Text style={styles.plantLatin}>{plant.location} • {plant.sensorDevices.length} devices</Text>
+            </View>
+            <Text style={styles.sensorAlertCount}>{snapshot.alertCount} ALERTS</Text>
+          </View>
+
+          <TelemetryGrid readings={snapshot.latestReadings} />
+
+          {plant.sensorDevices.map((device) => (
+            <View key={device.id} style={styles.sensorDeviceRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.timelineLabel}>{device.name}</Text>
+                <Text style={styles.timelineDate}>{device.transport} • {device.capabilities.map(metricLabel).join(" • ")}</Text>
+              </View>
+              <View style={{ alignItems: "flex-end" }}>
+                <Text style={styles.sensorStatus}>{sensorStatus(device)}</Text>
+                <Text style={styles.timelineDate}>{device.batteryPercent !== undefined ? device.batteryPercent + "% BAT" : "BAT N/A"}</Text>
+              </View>
+            </View>
+          ))}
+
+          {plant.sensorAlerts.filter((alert) => !alert.acknowledgedAt).slice(0, 5).map((alert) => (
+            <View key={alert.id} style={styles.sensorAlertRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sensorAlertTitle}>{alert.severity} // {alert.title}</Text>
+                <Text style={styles.sensorAlertDetail}>{alert.detail}</Text>
+              </View>
+              <Pressable style={styles.feedbackButton} onPress={() => onAcknowledge(plant.id, alert.id)}>
+                <Text style={styles.feedbackButtonText}>ACK</Text>
+              </Pressable>
+            </View>
+          ))}
+
+          {plant.sensorDevices.length === 0 ? (
+            <Text style={styles.emptyText}>No sensor hardware registered for this plant.</Text>
+          ) : null}
+        </Card>
+      ))}
     </ScrollView>
   );
 }
@@ -1401,5 +1586,21 @@ const styles = StyleSheet.create({
   feedbackState: { color: colors.cyan, fontSize: 8, fontWeight: "900", letterSpacing: 0.8 },
   careScheduleRow: { flexDirection: "row", gap: 12 },
   careScheduleText: { color: colors.green, fontSize: 9, fontWeight: "900", letterSpacing: 0.6 },
-  careRecommendationPreview: { gap: 6, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 10 }
+  careRecommendationPreview: { gap: 6, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 10 },
+  sensorPanel: { gap: 10 },
+  sensorSummaryRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  sensorSummary: { color: colors.green, fontSize: 8, fontWeight: "900", letterSpacing: 0.7 },
+  telemetryGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  telemetryTile: { width: "48%", minHeight: 70, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: 10, backgroundColor: "#080D0A" },
+  telemetryLabel: { color: colors.muted, fontSize: 7, fontWeight: "900", letterSpacing: 0.8 },
+  telemetryValue: { color: colors.green, fontSize: 19, fontWeight: "900", marginTop: 5 },
+  telemetryMeta: { color: "#6F8A7A", fontSize: 7, fontWeight: "800", marginTop: 4 },
+  sensorPlantCard: { gap: 12 },
+  sensorPlantTop: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  sensorAlertCount: { color: colors.amber, fontSize: 9, fontWeight: "900" },
+  sensorDeviceRow: { flexDirection: "row", gap: 12, alignItems: "center", paddingVertical: 9, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  sensorStatus: { color: colors.green, fontSize: 9, fontWeight: "900" },
+  sensorAlertRow: { flexDirection: "row", gap: 10, alignItems: "center", paddingVertical: 9, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  sensorAlertTitle: { color: colors.amber, fontSize: 9, fontWeight: "900" },
+  sensorAlertDetail: { color: colors.muted, fontSize: 9, lineHeight: 14, marginTop: 3 }
 });
