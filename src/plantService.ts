@@ -42,7 +42,10 @@ export function createPlantFromScan(result: ScanResult): Plant {
     timeline: [
       event("scan", "PlantPulse scan — " + result.healthScore + "/100", result.createdAt)
     ],
-    recommendationFeedback: []
+    recommendationFeedback: [],
+    sensorDevices: [],
+    sensorReadings: [],
+    sensorAlerts: []
   };
 }
 
