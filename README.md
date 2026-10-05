@@ -434,7 +434,8 @@ The next production-readiness priorities are:
 6. **Production deployment** — managed PostgreSQL, object storage, DNS/TLS/API gateway and observability.
 7. **Production Plant Intelligence** — trained/calibrated botanical models and verified safety knowledge.
 
-Full engineering roadmap: [docs/ROADMAP.md](docs/ROADMAP.md)
+Full engineering roadmap: [docs/ROADMAP.md](docs/ROADMAP.md)  
+Production-readiness gate: [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md)
 
 ---
 
