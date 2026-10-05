@@ -40,7 +40,6 @@ async function seededOutbox() {
 test("push worker moves a notification through ticket and receipt to delivered", async () => {
   const repo = await seededOutbox();
   const observability = new PlantPulseObservability("0.12.0");
-  const observability = new PlantPulseObservability("0.12.0");
   const worker = new PlantPulsePushWorker({
     repository: repo,
     provider: new FakeProvider({ status: "ok", id: "ticket-1" }),
@@ -60,6 +59,7 @@ test("push worker moves a notification through ticket and receipt to delivered",
 
 test("push worker retires DeviceNotRegistered tokens", async () => {
   const repo = await seededOutbox();
+  const observability = new PlantPulseObservability("0.12.0");
   const worker = new PlantPulsePushWorker({
     repository: repo,
     provider: new FakeProvider({
