@@ -1,4 +1,4 @@
-import { JwksAuthVerifier } from "./auth.js";
+import { DevelopmentAuthVerifier, JwksAuthVerifier } from "./auth.js";
 import { loadConfig } from "./config.js";
 import { createPlatformApp } from "./app.js";
 import { S3ObjectStore } from "./objectStore.js";
@@ -6,12 +6,14 @@ import { PostgresPlatformRepository } from "./postgresRepository.js";
 
 const config = loadConfig();
 const repository = new PostgresPlatformRepository(config.databaseUrl);
-const authVerifier = new JwksAuthVerifier({
-  issuer: config.auth.issuer,
-  audience: config.auth.audience,
-  jwksUrl: config.auth.jwksUrl,
-  tenantClaim: config.auth.tenantClaim
-});
+const authVerifier = config.auth.mode === "development"
+  ? new DevelopmentAuthVerifier()
+  : new JwksAuthVerifier({
+      issuer: config.auth.issuer,
+      audience: config.auth.audience,
+      jwksUrl: config.auth.jwksUrl,
+      tenantClaim: config.auth.tenantClaim
+    });
 const objectStore = new S3ObjectStore({
   region: config.objectStore.region,
   bucket: config.objectStore.bucket,
