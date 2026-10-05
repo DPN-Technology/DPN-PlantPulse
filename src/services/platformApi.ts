@@ -1,4 +1,4 @@
-import { Plant, RegisteredClientDevice } from "../types";
+import { Plant, PlatformNotification, RegisteredClientDevice } from "../types";
 
 export interface RemotePlantRecord {
   plant: Plant;
@@ -42,6 +42,7 @@ export interface PlatformApiClient {
   requestImageUpload(contentType: string, byteLength?: number): Promise<ImageUploadGrant>;
   registerDevice(request: RegisterDeviceRequest): Promise<RegisteredClientDevice>;
   claimPlantTag(request: PlantTagClaimRequest): Promise<void>;
+  queueNotifications(notifications: PlatformNotification[]): Promise<number>;
 }
 
 export class PlatformConflictError extends Error {
@@ -145,6 +146,26 @@ export class DpnPlatformApiClient implements PlatformApiClient {
     });
     if (!response.ok) throw new Error("Plant tag claim failed with HTTP " + response.status);
   }
+
+  async queueNotifications(notifications: PlatformNotification[]): Promise<number> {
+    if (!notifications.length) return 0;
+    const response = await this.request("/v1/notifications/queue", {
+      method: "POST",
+      body: JSON.stringify({
+        notifications: notifications.slice(0, 20).map((item) => ({
+          sourceId: item.id,
+          kind: item.kind,
+          title: item.title,
+          body: item.body,
+          createdAt: item.createdAt,
+          ...(item.plantId ? { plantId: item.plantId } : {})
+        }))
+      })
+    });
+    if (!response.ok) throw new Error("Notification queue failed with HTTP " + response.status);
+    const body = (await response.json()) as { queued?: number };
+    return typeof body.queued === "number" ? body.queued : 0;
+  }
 }
 
 export class UnconfiguredPlatformApiClient implements PlatformApiClient {
@@ -157,4 +178,5 @@ export class UnconfiguredPlatformApiClient implements PlatformApiClient {
   async requestImageUpload(_contentType: string, _byteLength?: number): Promise<ImageUploadGrant> { return this.fail(); }
   async registerDevice(_request: RegisterDeviceRequest): Promise<RegisteredClientDevice> { return this.fail(); }
   async claimPlantTag(_request: PlantTagClaimRequest): Promise<void> { return this.fail(); }
+  async queueNotifications(_notifications: PlatformNotification[]): Promise<number> { return this.fail(); }
 }
