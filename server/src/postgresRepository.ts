@@ -3,6 +3,9 @@ import { PlatformRepository } from "./repository.js";
 import {
   CloudPlantRecord,
   DeviceRegistrationInput,
+  MediaCleanupCandidate,
+  MediaReservationInput,
+  MediaUploadRecord,
   OperationReportInput,
   PlantTagClaimInput,
   PushPlantInput,
@@ -13,6 +16,68 @@ import {
   ResourceNotFoundError,
   RevisionConflictError
 } from "./types.js";
+
+function collectCloudMediaKeys(value: unknown, keys = new Set<string>()): Set<string> {
+  if (Array.isArray(value)) {
+    for (const item of value) collectCloudMediaKeys(item, keys);
+    return keys;
+  }
+  if (!value || typeof value !== "object") return keys;
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    if (key === "cloudImageKey" && typeof child === "string" && child.trim()) {
+      keys.add(child.trim());
+    } else {
+      collectCloudMediaKeys(child, keys);
+    }
+  }
+  return keys;
+}
+
+function mediaRowToRecord(row: {
+  upload_id: string;
+  tenant_id: string;
+  user_id: string;
+  plant_id: string;
+  media_kind: MediaUploadRecord["mediaKind"];
+  object_key: string;
+  content_type: string;
+  byte_length: string | number | null;
+  actual_byte_length: string | number | null;
+  etag: string | null;
+  status: MediaUploadRecord["status"];
+  created_at: Date;
+  expires_at: Date;
+  verified_at: Date | null;
+  attached_at: Date | null;
+  detached_at: Date | null;
+  deleted_at: Date | null;
+  cleanup_attempt_count: number;
+  next_cleanup_at: Date;
+  last_error: string | null;
+}): MediaUploadRecord {
+  return {
+    uploadId: row.upload_id,
+    tenantId: row.tenant_id,
+    userId: row.user_id,
+    plantId: row.plant_id,
+    mediaKind: row.media_kind,
+    objectKey: row.object_key,
+    contentType: row.content_type,
+    expectedByteLength: Number(row.byte_length ?? 0),
+    ...(row.actual_byte_length !== null ? { actualByteLength: Number(row.actual_byte_length) } : {}),
+    ...(row.etag ? { etag: row.etag } : {}),
+    status: row.status,
+    createdAt: row.created_at.toISOString(),
+    expiresAt: row.expires_at.toISOString(),
+    ...(row.verified_at ? { verifiedAt: row.verified_at.toISOString() } : {}),
+    ...(row.attached_at ? { attachedAt: row.attached_at.toISOString() } : {}),
+    ...(row.detached_at ? { detachedAt: row.detached_at.toISOString() } : {}),
+    ...(row.deleted_at ? { deletedAt: row.deleted_at.toISOString() } : {}),
+    cleanupAttemptCount: row.cleanup_attempt_count,
+    nextCleanupAt: row.next_cleanup_at.toISOString(),
+    ...(row.last_error ? { lastError: row.last_error } : {})
+  };
+}
 
 export class PostgresPlatformRepository implements PlatformRepository {
   private readonly pool: Pool;
@@ -60,8 +125,9 @@ export class PostgresPlatformRepository implements PlatformRepository {
       await client.query("begin");
       const current = await client.query<{
         remote_revision: number;
+        plant: Record<string, unknown>;
       }>(
-        `select remote_revision
+        `select remote_revision, plant
            from plants
           where tenant_id = $1 and plant_id = $2
           for update`,
@@ -69,6 +135,9 @@ export class PostgresPlatformRepository implements PlatformRepository {
       );
 
       const now = new Date();
+      const previousPlant = current.rows[0]?.plant;
+      await this.validateAndReconcileMedia(client, input, previousPlant);
+
       if (current.rowCount === 0) {
         if (input.baseRemoteRevision !== undefined && input.baseRemoteRevision !== 0) {
           throw new RevisionConflictError(0, "Plant does not yet exist remotely");
@@ -251,7 +320,7 @@ export class PostgresPlatformRepository implements PlatformRepository {
   }
 
   async getTenantOperationalHealth(tenantId: string, userId: string): Promise<TenantOperationalHealth> {
-    const [plants, devices, operations] = await Promise.all([
+    const [plants, devices, operations, media] = await Promise.all([
       this.pool.query<{ count: string }>(
         "select count(*)::text as count from plants where tenant_id = $1",
         [tenantId]
@@ -274,6 +343,23 @@ export class PostgresPlatformRepository implements PlatformRepository {
            from client_operation_reports
           where tenant_id = $1 and user_id = $2
           order by observed_at desc`,
+        [tenantId, userId]
+      ),
+      this.pool.query<{
+        reserved: string;
+        verified: string;
+        attached: string;
+        delete_retry: string;
+        deleted: string;
+      }>(
+        `select
+           count(*) filter (where status = 'RESERVED')::text as reserved,
+           count(*) filter (where status = 'VERIFIED')::text as verified,
+           count(*) filter (where status = 'ATTACHED')::text as attached,
+           count(*) filter (where status = 'DELETE_RETRY')::text as delete_retry,
+           count(*) filter (where status = 'DELETED')::text as deleted
+         from media_uploads
+         where tenant_id = $1 and user_id = $2`,
         [tenantId, userId]
       )
     ]);
@@ -300,6 +386,13 @@ export class PostgresPlatformRepository implements PlatformRepository {
           lastBackgroundSyncResult: latestBackground.result
         } : {}),
         failedDevices
+      },
+      media: {
+        reserved: Number(media.rows[0]?.reserved ?? 0),
+        verified: Number(media.rows[0]?.verified ?? 0),
+        attached: Number(media.rows[0]?.attached ?? 0),
+        deleteRetry: Number(media.rows[0]?.delete_retry ?? 0),
+        deleted: Number(media.rows[0]?.deleted ?? 0)
       }
     };
   }
@@ -330,6 +423,231 @@ export class PostgresPlatformRepository implements PlatformRepository {
         JSON.stringify(input.detail),
         observedAt
       ]
+    );
+  }
+
+  async createMediaReservation(input: MediaReservationInput): Promise<MediaUploadRecord> {
+    const result = await this.pool.query(
+      `insert into media_uploads (
+         upload_id, tenant_id, user_id, plant_id, media_kind, object_key,
+         content_type, byte_length, status, created_at, expires_at, next_cleanup_at
+       ) values ($1::uuid,$2,$3,$4,$5,$6,$7,$8,'RESERVED',now(),$9,$9)
+       returning *`,
+      [
+        input.uploadId,
+        input.tenantId,
+        input.userId,
+        input.plantId,
+        input.mediaKind,
+        input.objectKey,
+        input.contentType,
+        input.expectedByteLength,
+        new Date(input.expiresAt)
+      ]
+    );
+    return mediaRowToRecord(result.rows[0]!);
+  }
+
+  async getMediaUpload(tenantId: string, userId: string, uploadId: string): Promise<MediaUploadRecord> {
+    const result = await this.pool.query(
+      `select * from media_uploads
+        where upload_id = $1::uuid and tenant_id = $2 and user_id = $3`,
+      [uploadId, tenantId, userId]
+    );
+    if (!result.rowCount) throw new ResourceNotFoundError("Media upload does not exist");
+    return mediaRowToRecord(result.rows[0]!);
+  }
+
+  async markMediaVerified(
+    tenantId: string,
+    userId: string,
+    uploadId: string,
+    actualByteLength: number,
+    etag?: string
+  ): Promise<MediaUploadRecord> {
+    const result = await this.pool.query(
+      `update media_uploads
+          set status = 'VERIFIED',
+              actual_byte_length = $4,
+              etag = $5,
+              verified_at = now(),
+              next_cleanup_at = now(),
+              last_error = null
+        where upload_id = $1::uuid
+          and tenant_id = $2
+          and user_id = $3
+          and status = 'RESERVED'
+          and expires_at > now()
+        returning *`,
+      [uploadId, tenantId, userId, actualByteLength, etag ?? null]
+    );
+    if (!result.rowCount) {
+      const current = await this.getMediaUpload(tenantId, userId, uploadId);
+      throw new ResourceConflictError(
+        current.expiresAt <= new Date().toISOString()
+          ? "Media upload grant has expired"
+          : "Media upload is not awaiting verification"
+      );
+    }
+    return mediaRowToRecord(result.rows[0]!);
+  }
+
+  async markMediaDeleted(tenantId: string, userId: string, uploadId: string): Promise<void> {
+    const result = await this.pool.query(
+      `update media_uploads
+          set status = 'DELETED',
+              deleted_at = now(),
+              last_error = null
+        where upload_id = $1::uuid
+          and tenant_id = $2
+          and user_id = $3
+          and status in ('RESERVED','VERIFIED','DELETE_RETRY')`,
+      [uploadId, tenantId, userId]
+    );
+    if ((result.rowCount ?? 0) === 0) {
+      const current = await this.getMediaUpload(tenantId, userId, uploadId);
+      if (current.status === "ATTACHED") {
+        throw new ResourceConflictError("Detach media from the plant before deletion");
+      }
+      if (current.status === "DELETED") return;
+      throw new ResourceConflictError("Media cannot be deleted in its current state");
+    }
+  }
+
+  async leaseMediaCleanup(limit: number, orphanBefore: Date): Promise<MediaCleanupCandidate[]> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const result = await client.query<{
+        upload_id: string;
+        object_key: string;
+        tenant_id: string;
+        user_id: string;
+        plant_id: string;
+        status: MediaUploadRecord["status"];
+        cleanup_attempt_count: number;
+      }>(
+        `select upload_id, object_key, tenant_id, user_id, plant_id, status, cleanup_attempt_count
+           from media_uploads
+          where (
+              status = 'RESERVED' and expires_at <= now()
+            ) or (
+              status = 'VERIFIED'
+              and attached_at is null
+              and coalesce(detached_at, verified_at, created_at) <= $2
+            ) or (
+              status = 'DELETE_RETRY' and next_cleanup_at <= now()
+            )
+          order by coalesce(detached_at, verified_at, expires_at, created_at) asc
+          for update skip locked
+          limit $1`,
+        [limit, orphanBefore]
+      );
+
+      if (result.rowCount) {
+        await client.query(
+          `update media_uploads
+              set status = 'DELETE_PENDING',
+                  cleanup_attempt_count = cleanup_attempt_count + 1,
+                  next_cleanup_at = now() + interval '5 minutes'
+            where upload_id = any($1::uuid[])`,
+          [result.rows.map((row) => row.upload_id)]
+        );
+      }
+      await client.query("commit");
+      return result.rows.map((row) => ({
+        uploadId: row.upload_id,
+        objectKey: row.object_key,
+        tenantId: row.tenant_id,
+        userId: row.user_id,
+        plantId: row.plant_id,
+        status: row.status,
+        cleanupAttemptCount: row.cleanup_attempt_count + 1
+      }));
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async markMediaCleanupRetry(uploadId: string, error: string, nextAttemptAt: Date): Promise<void> {
+    await this.pool.query(
+      `update media_uploads
+          set status = 'DELETE_RETRY',
+              last_error = $2,
+              next_cleanup_at = $3
+        where upload_id = $1::uuid`,
+      [uploadId, error.slice(0, 2000), nextAttemptAt]
+    );
+  }
+
+  async markMediaCleanupDeleted(uploadId: string): Promise<void> {
+    await this.pool.query(
+      `update media_uploads
+          set status = 'DELETED',
+              deleted_at = now(),
+              last_error = null
+        where upload_id = $1::uuid`,
+      [uploadId]
+    );
+  }
+
+  private async validateAndReconcileMedia(
+    client: PoolClient,
+    input: PushPlantInput,
+    previousPlant?: Record<string, unknown>
+  ): Promise<void> {
+    const incoming = [...collectCloudMediaKeys(input.plant)];
+    const previous = collectCloudMediaKeys(previousPlant);
+    const introduced = incoming.filter((key) => !previous.has(key));
+
+    if (introduced.length) {
+      const verified = await client.query<{ object_key: string }>(
+        `select object_key
+           from media_uploads
+          where tenant_id = $1
+            and plant_id = $2
+            and object_key = any($3::text[])
+            and status in ('VERIFIED','ATTACHED')
+            and deleted_at is null
+          for update`,
+        [input.tenantId, input.plantId, introduced]
+      );
+      const allowed = new Set(verified.rows.map((row) => row.object_key));
+      const invalid = introduced.filter((key) => !allowed.has(key));
+      if (invalid.length) {
+        throw new ResourceConflictError("Plant contains a cloud media reference that is not verified for this plant");
+      }
+    }
+
+    if (incoming.length) {
+      await client.query(
+        `update media_uploads
+            set status = 'ATTACHED',
+                attached_at = coalesce(attached_at, now()),
+                detached_at = null,
+                last_error = null
+          where tenant_id = $1
+            and plant_id = $2
+            and object_key = any($3::text[])
+            and status in ('VERIFIED','ATTACHED')`,
+        [input.tenantId, input.plantId, incoming]
+      );
+    }
+
+    await client.query(
+      `update media_uploads
+          set status = 'VERIFIED',
+              attached_at = null,
+              detached_at = now(),
+              next_cleanup_at = now()
+        where tenant_id = $1
+          and plant_id = $2
+          and status = 'ATTACHED'
+          and not (object_key = any($3::text[]))`,
+      [input.tenantId, input.plantId, incoming]
     );
   }
 
