@@ -14,8 +14,11 @@ export async function loadPlatformState(): Promise<PlatformState> {
     const raw = await AsyncStorage.getItem(PLATFORM_STATE_KEY);
     if (!raw) return defaultPlatformState;
     const parsed = JSON.parse(raw) as Partial<PlatformState>;
+    const persistedIdentity = parsed.identity;
     return {
-      identity: parsed.identity ?? defaultPlatformState.identity,
+      identity: persistedIdentity?.profile
+        ? { status: "DISCONNECTED", profile: persistedIdentity.profile, expiresAt: persistedIdentity.expiresAt }
+        : defaultPlatformState.identity,
       device: parsed.device,
       notifications: Array.isArray(parsed.notifications) ? parsed.notifications : [],
       conflicts: Array.isArray(parsed.conflicts) ? parsed.conflicts : [],
@@ -28,5 +31,13 @@ export async function loadPlatformState(): Promise<PlatformState> {
 }
 
 export async function savePlatformState(state: PlatformState): Promise<void> {
-  await AsyncStorage.setItem(PLATFORM_STATE_KEY, JSON.stringify(state));
+  const safeState: PlatformState = {
+    ...state,
+    identity: {
+      status: state.identity.status,
+      profile: state.identity.profile,
+      expiresAt: state.identity.expiresAt
+    }
+  };
+  await AsyncStorage.setItem(PLATFORM_STATE_KEY, JSON.stringify(safeState));
 }
