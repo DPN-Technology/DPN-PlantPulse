@@ -23,7 +23,7 @@ const objectStore = new S3ObjectStore({
   maxUploadBytes: config.objectStore.maxUploadBytes
 });
 
-const app = createPlatformApp({
+const app = await createPlatformApp({
   repository,
   authVerifier,
   objectStore,
