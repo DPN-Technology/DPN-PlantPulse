@@ -65,13 +65,26 @@ class MediaApi implements PlatformApiClient {
   grants = 0;
   async pullPlants() { return []; }
   async pushPlant() { return { remoteRevision: 1, updatedAt: new Date().toISOString() }; }
-  async requestImageUpload(contentType: string) {
+  async requestImageUpload(_plantId: string, _mediaKind: "PLANT_PRIMARY" | "SCAN", contentType: string) {
     this.grants += 1;
     return {
+      uploadId: "upload-" + this.grants,
       objectKey: "objects/" + this.grants + ".jpg",
       uploadUrl: "https://upload.invalid/" + this.grants,
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
       headers: { "Content-Type": contentType }
+    };
+  }
+  async completeImageUpload(uploadId: string) {
+    const index = Number(uploadId.replace("upload-", ""));
+    return {
+      uploadId,
+      objectKey: "objects/" + index + ".jpg",
+      contentType: "image/jpeg",
+      expectedByteLength: 5,
+      actualByteLength: 5,
+      status: "VERIFIED" as const,
+      verifiedAt: new Date().toISOString()
     };
   }
   async registerDevice(): Promise<RegisteredClientDevice> {
@@ -135,6 +148,9 @@ test("sync captures remote snapshot and both conflict strategies are explicit", 
       throw new Error("push should be blocked by conflict");
     },
     async requestImageUpload() {
+      throw new Error("unused");
+    },
+    async completeImageUpload() {
       throw new Error("unused");
     },
     async registerDevice() {
