@@ -236,3 +236,60 @@ test("PostgreSQL notification policy suppresses categories and defers quiet-hour
     await outbox.close();
   }
 });
+
+
+test("PostgreSQL operation reports preserve the newest device sync evidence", { skip: !databaseUrl }, async () => {
+  const repository = new PostgresPlatformRepository(databaseUrl!);
+  const tenantId = "ops-tenant-" + randomUUID();
+  const userId = "ops-user-" + randomUUID();
+  const deviceId = "ops-device-" + randomUUID();
+
+  try {
+    await repository.registerDevice({
+      tenantId,
+      userId,
+      deviceId,
+      name: "Operations Phone",
+      platform: "android"
+    });
+
+    const newer = new Date();
+    const older = new Date(newer.getTime() - 60_000);
+
+    await repository.recordOperationReport({
+      tenantId,
+      userId,
+      deviceId,
+      operation: "BACKGROUND_SYNC",
+      result: "SUCCESS",
+      observedAt: newer.toISOString(),
+      detail: { pushed: 1 }
+    });
+    await repository.recordOperationReport({
+      tenantId,
+      userId,
+      deviceId,
+      operation: "BACKGROUND_SYNC",
+      result: "FAILED",
+      observedAt: older.toISOString(),
+      detail: { failed: 1 }
+    });
+    await repository.recordOperationReport({
+      tenantId,
+      userId,
+      deviceId,
+      operation: "SYNC",
+      result: "SUCCESS",
+      observedAt: newer.toISOString(),
+      detail: { pushed: 2, pulled: 1 }
+    });
+
+    const health = await repository.getTenantOperationalHealth(tenantId, userId);
+    assert.equal(health.operations.lastBackgroundSyncResult, "SUCCESS");
+    assert.equal(health.operations.lastBackgroundSyncAt, newer.toISOString());
+    assert.equal(health.operations.lastSyncResult, "SUCCESS");
+    assert.equal(health.operations.failedDevices, 0);
+  } finally {
+    await repository.close();
+  }
+});
