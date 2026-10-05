@@ -15,11 +15,11 @@
 | Object-storage signing | Implemented | production bucket policy, encryption/KMS, lifecycle and completion verification |
 | Offline-first synchronization | Native deferrable background task implemented | signed physical-device execution proof + multi-device end-to-end tests |
 | Conflict handling | Implemented | production multi-device validation |
-| Device enrollment | Implemented | revocation/admin lifecycle |
+| Device trust | Ownership-safe enrollment + inventory + sticky revocation implemented | production administrative recovery/reactivation policy + device-bound proof |
 | Push delivery | Client enrollment + server outbox/Expo ticket-receipt worker implemented | production push credentials, device proof and delivery SLO evidence |
 | Botanical vision | Prototype/provider contract | trained model, calibration, provenance, evaluation |
 | Sensor network | Protocol/telemetry model | native BLE hardware integration and device identity |
-| Observability | Development logs | metrics, traces, dashboards, alerts, SLOs |
+| Observability | Authenticated durable plant/device/outbox health counters implemented | external metrics/traces, dashboards, alerts and validated SLOs |
 | Disaster recovery | Schema/local tooling | production backup/restore exercise and documented RPO/RTO |
 
 ## v0.9 engineering objectives
@@ -79,9 +79,11 @@ Production delivery still needs:
 - [x] retry/backoff;
 - [x] ticket/receipt delivery state;
 - [ ] production provider credentials/environment proof;
-- [ ] delivery metrics / SLO evidence;
-- preference controls;
-- care / prediction / sensor / sync / security category policy.
+- [x] durable delivery-state counters;
+- [x] preference controls;
+- [x] care / prediction / sensor / sync / security category policy;
+- [x] quiet-hour delivery deferral;
+- [ ] external delivery metrics / SLO evidence;
 
 ### 5. Managed deployment
 
