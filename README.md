@@ -6,7 +6,7 @@
 <p align="center">
   <img alt="DPN Technology" src="https://img.shields.io/badge/DPN-Technology-070707?style=flat-square&logo=github">
   <img alt="PlantPulse" src="https://img.shields.io/badge/PlantPulse-Biological%20Intelligence-19C864?style=flat-square">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.9.0-19C864?style=flat-square">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.10.0-19C864?style=flat-square">
   <img alt="Security" src="https://img.shields.io/badge/security-CodeQL%20%2B%20CI-E50914?style=flat-square">
   <img alt="Status" src="https://img.shields.io/badge/status-Active%20Development-19C864?style=flat-square">
 </p>
@@ -71,7 +71,8 @@ It is **not** intended to be a branded clone of an existing plant identifier.
 | **Conflict recovery** | ✅ Implemented | explicit **KEEP LOCAL** / **USE REMOTE** resolution |
 | **Native secret storage** | ✅ Implemented | Expo SecureStore on Android/iOS |
 | **DPN OIDC client** | ✅ Implemented | discovery, Authorization Code + PKCE, UserInfo, refresh and revocation lifecycle |
-| **Push enrollment** | 🟡 Client scaffold | permission flow + token/device enrollment; remote delivery worker still pending |
+| **Native background sync** | ✅ Implemented | Expo BackgroundTask / TaskManager worker using the existing conflict-safe sync engine |
+| **Push delivery** | ✅ Implemented service path | PostgreSQL outbox, Expo Push tickets/receipts, retry/backoff, invalid-token retirement |
 | **Production botanical AI** | ⛔ Not claimed | production model training/calibration remains future work |
 | **Production DPN cloud deployment** | ⛔ Not claimed | production identity, managed DB/storage, DNS/TLS/gateway remain provisioning work |
 
@@ -240,8 +241,8 @@ DPN PlantPulse is designed so product polish does not hide engineering boundarie
 - production PostgreSQL deployment;
 - production object-storage bucket/KMS policy;
 - production DNS/TLS/API gateway;
-- production push-delivery worker/provider;
-- OS-level background synchronization;
+- production push credentials / provider environment validation;
+- production proof of background execution across supported physical devices;
 - production botanical computer-vision models;
 - native PlantPulse BLE hardware implementation;
 - calibrated agronomic prediction models.
@@ -265,6 +266,7 @@ PUT  /v1/plants/:plantId
 POST /v1/media/uploads
 POST /v1/devices
 POST /v1/plant-tags/claim
+POST /v1/notifications/queue
 ```
 
 The backend currently provides:
@@ -276,6 +278,8 @@ The backend currently provides:
 - unique PlantPulse tag claiming;
 - audit events;
 - S3-compatible signed uploads;
+- PostgreSQL notification outbox with per-device deduplication;
+- Expo Push Service ticket/receipt delivery worker;
 - local Docker / PostgreSQL / MinIO development environment;
 - integration coverage against real disposable PostgreSQL in CI.
 
@@ -355,6 +359,7 @@ src/
   care*.ts                      Care scheduling, intelligence and recommendation logic
   sensors.ts                    Sensor telemetry / alert model
   platformRuntime.ts            Mobile sync / retry / device / conflict orchestration
+  backgroundSync.ts              Native deferrable background sync worker
   platformSync.ts               Revision reconciliation and conflict handling
   mediaSync.ts                  Signed media upload execution
   secureIdentity.ts             Native SecureStore identity boundary
@@ -367,6 +372,9 @@ server/
   src/auth.ts                   JWKS + development auth modes
   src/postgresRepository.ts     PostgreSQL persistence and concurrency
   src/objectStore.ts            Signed S3-compatible media grants
+  src/notificationRepository.ts  PostgreSQL push outbox leasing / dedupe
+  src/pushProvider.ts            Expo Push Service transport
+  src/pushWorker.ts              Ticket / receipt / retry delivery worker
   db/schema.sql                 Platform database schema
   test/                         API + PostgreSQL integration coverage
 
@@ -433,8 +441,8 @@ The next production-readiness priorities are:
 
 1. **DPN One identity deployment** — provision the authorization server/client registration that the v0.9 OIDC client is ready to use.
 2. **Identity operations** — key rotation, client registration policy, revocation evidence and device trust.
-3. **Background synchronization** — native OS task scheduling rather than foreground-only retry.
-4. **Remote push delivery** — server-side outbox worker/provider.
+3. **Background-sync validation** — prove deferrable execution on signed physical-device builds across iOS/Android power states.
+4. **Push productionization** — provision production push credentials, delivery dashboards and notification preferences.
 5. **Media verification** — server-side completion and object validation.
 6. **Production deployment** — managed PostgreSQL, object storage, DNS/TLS/API gateway and observability.
 7. **Production Plant Intelligence** — trained/calibrated botanical models and verified safety knowledge.
