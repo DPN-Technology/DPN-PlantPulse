@@ -42,6 +42,19 @@ export interface PlantTagClaimRequest {
   plantId: string;
 }
 
+export interface SyncOperationReport {
+  deviceId: string;
+  source: "FOREGROUND" | "BACKGROUND";
+  result: "SUCCESS" | "FAILED" | "SKIPPED";
+  observedAt: string;
+  pushed: number;
+  pulled: number;
+  uploadedImages: number;
+  failed: number;
+  conflicts: number;
+  queuedNotifications: number;
+}
+
 export interface PlatformApiClient {
   pullPlants(): Promise<RemotePlantRecord[]>;
   pushPlant(request: PushPlantRequest): Promise<PushPlantResponse>;
@@ -54,6 +67,7 @@ export interface PlatformApiClient {
   listDevices(): Promise<RegisteredClientDevice[]>;
   revokeDevice(deviceId: string): Promise<void>;
   getOperationalHealth(): Promise<PlatformOperationalHealth>;
+  reportSyncOperation(report: SyncOperationReport): Promise<void>;
 }
 
 export class PlatformConflictError extends Error {
@@ -192,6 +206,14 @@ export class DpnPlatformApiClient implements PlatformApiClient {
     return (await response.json()) as PlatformOperationalHealth;
   }
 
+  async reportSyncOperation(report: SyncOperationReport): Promise<void> {
+    const response = await this.request("/v1/operations/sync-report", {
+      method: "POST",
+      body: JSON.stringify(report)
+    });
+    if (!response.ok) throw new Error("Sync operation report failed with HTTP " + response.status);
+  }
+
   async queueNotifications(notifications: PlatformNotification[]): Promise<number> {
     if (!notifications.length) return 0;
     const response = await this.request("/v1/notifications/queue", {
@@ -229,4 +251,5 @@ export class UnconfiguredPlatformApiClient implements PlatformApiClient {
   async listDevices(): Promise<RegisteredClientDevice[]> { return this.fail(); }
   async revokeDevice(_deviceId: string): Promise<void> { return this.fail(); }
   async getOperationalHealth(): Promise<PlatformOperationalHealth> { return this.fail(); }
+  async reportSyncOperation(_report: SyncOperationReport): Promise<void> { return this.fail(); }
 }
