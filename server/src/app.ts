@@ -4,13 +4,15 @@ import { AuthVerifier } from "./auth.js";
 import { ObjectStore } from "./objectStore.js";
 import { PlatformRepository } from "./repository.js";
 import { NotificationOutboxRepository, NotificationKind, NotificationQueueItem } from "./notificationTypes.js";
+import { PlantPulseObservability } from "./observability.js";
 import {
   AuthContext,
   JsonObject,
   RequestValidationError,
   ResourceConflictError,
   ResourceNotFoundError,
-  RevisionConflictError
+  RevisionConflictError,
+  OperationReportResult
 } from "./types.js";
 
 export interface PlatformAppOptions {
@@ -18,6 +20,9 @@ export interface PlatformAppOptions {
   objectStore: ObjectStore;
   authVerifier: AuthVerifier;
   notificationRepository?: NotificationOutboxRepository;
+  observability?: PlantPulseObservability;
+  metricsEnabled?: boolean;
+  controlHealthEnabled?: boolean;
   logger?: boolean;
   rateLimitMax?: number;
   rateLimitTimeWindow?: string;
@@ -121,6 +126,12 @@ export async function createPlatformApp(options: PlatformAppOptions) {
     requestIdHeader: "x-request-id"
   });
 
+  const requestStarted = new WeakMap<FastifyRequest, bigint>();
+
+  app.addHook("onRequest", async (request) => {
+    requestStarted.set(request, process.hrtime.bigint());
+  });
+
   await app.register(rateLimit, {
     global: true,
     max: options.rateLimitMax ?? 120,
@@ -134,7 +145,9 @@ export async function createPlatformApp(options: PlatformAppOptions) {
     }
   });
 
-  app.addHook("onSend", async (_request, reply, payload) => {
+  app.addHook("onSend", async (request, reply, payload) => {
+    reply.header("x-request-id", request.id);
+    reply.header("x-dpn-service", "DPN-PLANTPULSE");
     reply.header("x-content-type-options", "nosniff");
     reply.header("x-frame-options", "DENY");
     reply.header("referrer-policy", "no-referrer");
@@ -142,20 +155,92 @@ export async function createPlatformApp(options: PlatformAppOptions) {
     return payload;
   });
 
+  app.addHook("onResponse", async (request, reply) => {
+    const started = requestStarted.get(request);
+    if (!started || !options.observability) return;
+    const durationMs = Number(process.hrtime.bigint() - started) / 1_000_000;
+    options.observability.recordHttp(
+      request.method,
+      request.routeOptions.url ?? "__unknown__",
+      reply.statusCode,
+      durationMs
+    );
+  });
+
+  async function readinessSnapshot() {
+    const dependencies: Record<string, boolean> = {
+      database: false,
+      notificationOutbox: !options.notificationRepository
+    };
+
+    try {
+      await options.repository.ping();
+      dependencies.database = true;
+    } catch {
+      dependencies.database = false;
+    }
+
+    if (options.notificationRepository) {
+      try {
+        await options.notificationRepository.ping();
+        dependencies.notificationOutbox = true;
+      } catch {
+        dependencies.notificationOutbox = false;
+      }
+    }
+
+    for (const [dependency, ready] of Object.entries(dependencies)) {
+      options.observability?.setDependencyReady(dependency, ready);
+    }
+
+    return dependencies;
+  }
+
   app.get("/health", async () => ({
     service: "dpn-plantpulse-platform",
     status: "ok",
-    version: "0.11.0"
+    version: "0.12.0"
   }));
 
   app.get("/ready", async (_request, reply) => {
-    try {
-      await options.repository.ping();
-      return { status: "ready" };
-    } catch {
-      return reply.code(503).send({ status: "not-ready" });
-    }
+    const dependencies = await readinessSnapshot();
+    const ready = Object.values(dependencies).every(Boolean);
+    const payload = {
+      status: ready ? "ready" : "not-ready",
+      dependencies,
+      version: "0.12.0"
+    };
+    return ready ? payload : reply.code(503).send(payload);
   });
+
+  if (options.metricsEnabled !== false && options.observability) {
+    app.get("/metrics", async (_request, reply) => {
+      reply.type(options.observability!.metricsContentType);
+      return options.observability!.metricsText();
+    });
+  }
+
+  if (options.controlHealthEnabled !== false && options.observability) {
+    app.get("/control/health", async (_request, reply) => {
+      const dependencies = await readinessSnapshot();
+      const reliability = options.observability!.snapshot();
+      const ready = Object.values(dependencies).every(Boolean);
+      const state = !ready
+        ? "DEGRADED"
+        : reliability.state;
+      return reply.send({
+        schemaVersion: "1.0",
+        productId: "DPN-PLANTPULSE",
+        integrationId: "DPN-PLANTPULSE",
+        service: "dpn-plantpulse-platform",
+        version: "0.12.0",
+        status: state,
+        readiness: dependencies,
+        reliability,
+        generatedAt: new Date().toISOString()
+      });
+    });
+  }
 
   app.get("/v1/me", async (request, reply) => {
     const auth = await requireAuth(request, reply, options.authVerifier);
@@ -307,6 +392,57 @@ export async function createPlatformApp(options: PlatformAppOptions) {
     return preferences;
   });
 
+  app.post("/v1/operations/sync-report", async (request, reply) => {
+    const auth = await requireAuth(request, reply, options.authVerifier);
+    if (!auth) return;
+    if (!isRecord(request.body)) {
+      throw new RequestValidationError("request body must be an object");
+    }
+
+    const deviceId = stringField(request.body, "deviceId", 160, true)!;
+    const source = stringField(request.body, "source", 20, true)!;
+    if (source !== "FOREGROUND" && source !== "BACKGROUND") {
+      throw new RequestValidationError("source must be FOREGROUND or BACKGROUND");
+    }
+    const result = stringField(request.body, "result", 20, true)! as OperationReportResult;
+    if (!["SUCCESS", "FAILED", "SKIPPED"].includes(result)) {
+      throw new RequestValidationError("result is invalid");
+    }
+    const observedAt = stringField(request.body, "observedAt", 80, true)!;
+    if (Number.isNaN(new Date(observedAt).getTime())) {
+      throw new RequestValidationError("observedAt must be an ISO date");
+    }
+
+    const devices = await options.repository.listDevices(auth.tenantId, auth.userId);
+    const device = devices.find((item) => item.deviceId === deviceId && !item.revokedAt);
+    if (!device) {
+      throw new ResourceNotFoundError("Active reporting device does not exist");
+    }
+
+    const integer = (key: string) => integerField(request.body as JsonObject, key, 0, false) ?? 0;
+    const detail = {
+      pushed: integer("pushed"),
+      pulled: integer("pulled"),
+      uploadedImages: integer("uploadedImages"),
+      failed: integer("failed"),
+      conflicts: integer("conflicts"),
+      queuedNotifications: integer("queuedNotifications")
+    };
+
+    await options.repository.recordOperationReport({
+      tenantId: auth.tenantId,
+      userId: auth.userId,
+      deviceId,
+      operation: source === "BACKGROUND" ? "BACKGROUND_SYNC" : "SYNC",
+      result,
+      observedAt,
+      detail
+    });
+
+    options.observability?.recordSyncReport(source, result, detail.conflicts);
+    return reply.code(202).send({ accepted: true });
+  });
+
   app.get("/v1/operations/health", async (request, reply) => {
     const auth = await requireAuth(request, reply, options.authVerifier);
     if (!auth) return;
@@ -409,6 +545,7 @@ export async function createPlatformApp(options: PlatformAppOptions) {
     }
 
     if (error instanceof RevisionConflictError) {
+      options.observability?.recordRevisionConflict();
       return reply.code(409).send({
         error: "revision_conflict",
         message: error.message,
