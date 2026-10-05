@@ -318,6 +318,7 @@ export default function App() {
               " • Pulled " + summary.pulled +
               " • Images " + summary.uploadedImages +
               " • Conflicts " + summary.conflicts +
+              " • Push " + summary.queuedNotifications +
               (summary.failed > 0 ? " • Retry " + summary.failed : "")
           );
         }
@@ -1856,7 +1857,7 @@ function PlatformScreen({
         </View>
         {summary ? (
           <Text style={styles.timelineDate}>
-            LAST SYNC • PUSH {summary.pushed} • PULL {summary.pulled} • MEDIA {summary.uploadedImages} • TAGS {summary.claimedTags} • FAILED {summary.failed}
+            LAST SYNC • RECORDS {summary.pushed}↑/{summary.pulled}↓ • MEDIA {summary.uploadedImages} • TAGS {summary.claimedTags} • PUSH QUEUED {summary.queuedNotifications} • FAILED {summary.failed}
           </Text>
         ) : null}
         {platformState.lastSyncError ? <Text style={styles.warningText}>{platformState.lastSyncError}</Text> : null}
