@@ -1242,6 +1242,41 @@ function TelemetryGrid({ readings }: { readings: Partial<Record<SensorMetric, Se
   );
 }
 
+function TelemetryHistory({ readings }: { readings: SensorReading[] }) {
+  const valid = [...readings]
+    .filter((reading) => reading.quality !== "INVALID")
+    .sort((a, b) => new Date(a.observedAt).getTime() - new Date(b.observedAt).getTime())
+    .slice(-18);
+
+  if (valid.length < 2) return null;
+
+  const values = valid.map((reading) => reading.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = Math.max(1, max - min);
+
+  return (
+    <View style={styles.telemetryHistoryWrap}>
+      <View style={styles.telemetryHistoryHeader}>
+        <Text style={styles.telemetryHistoryTitle}>{metricLabel(valid[0]!.metric)} HISTORY</Text>
+        <Text style={styles.telemetryHistoryRange}>{min}–{max} {valid[0]!.unit}</Text>
+      </View>
+      <View style={styles.telemetryBars}>
+        {valid.map((reading) => {
+          const height = 12 + ((reading.value - min) / range) * 48;
+          return (
+            <View
+              key={reading.id}
+              style={[styles.telemetryBar, { height }]}
+            />
+          );
+        })}
+      </View>
+      <Text style={styles.telemetryMeta}>MEASURED HISTORY • LAST {valid.length} VALID READINGS</Text>
+    </View>
+  );
+}
+
 function SensorNetworkScreen({
   plants,
   onAcknowledge
@@ -1301,6 +1336,10 @@ function SensorNetworkScreen({
           </View>
 
           <TelemetryGrid readings={snapshot.latestReadings} />
+          {(["soilMoisture", "light", "airTemperature", "humidity"] as SensorMetric[]).map((metric) => {
+            const metricReadings = plant.sensorReadings.filter((reading) => reading.metric === metric);
+            return metricReadings.length >= 2 ? <TelemetryHistory key={metric} readings={metricReadings} /> : null;
+          })}
 
           {plant.sensorDevices.map((device) => (
             <View key={device.id} style={styles.sensorDeviceRow}>
@@ -1602,5 +1641,11 @@ const styles = StyleSheet.create({
   sensorStatus: { color: colors.green, fontSize: 9, fontWeight: "900" },
   sensorAlertRow: { flexDirection: "row", gap: 10, alignItems: "center", paddingVertical: 9, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
   sensorAlertTitle: { color: colors.amber, fontSize: 9, fontWeight: "900" },
-  sensorAlertDetail: { color: colors.muted, fontSize: 9, lineHeight: 14, marginTop: 3 }
+  sensorAlertDetail: { color: colors.muted, fontSize: 9, lineHeight: 14, marginTop: 3 },
+  telemetryHistoryWrap: { gap: 7, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 10 },
+  telemetryHistoryHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10 },
+  telemetryHistoryTitle: { color: colors.text, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
+  telemetryHistoryRange: { color: colors.green, fontSize: 9, fontWeight: "900" },
+  telemetryBars: { minHeight: 64, flexDirection: "row", alignItems: "flex-end", gap: 3 },
+  telemetryBar: { flex: 1, minWidth: 3, maxWidth: 12, borderRadius: 3, backgroundColor: colors.green }
 });
