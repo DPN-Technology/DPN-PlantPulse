@@ -6,6 +6,7 @@ import {
   PushPlantInput,
   PushPlantResult,
   RegisteredDevice,
+  TenantOperationalHealth,
   ResourceConflictError,
   ResourceNotFoundError,
   RevisionConflictError
@@ -18,6 +19,11 @@ interface StoredPlant {
   updatedAt: string;
 }
 
+interface StoredDevice extends RegisteredDevice {
+  tenantId: string;
+  userId: string;
+}
+
 interface StoredTag {
   tenantId: string;
   plantId: string;
@@ -25,7 +31,7 @@ interface StoredTag {
 
 export class InMemoryPlatformRepository implements PlatformRepository {
   private readonly plants = new Map<string, StoredPlant>();
-  private readonly devices = new Map<string, RegisteredDevice>();
+  private readonly devices = new Map<string, StoredDevice>();
   private readonly tags = new Map<string, StoredTag>();
 
   async ping(): Promise<void> {}
@@ -78,16 +84,53 @@ export class InMemoryPlatformRepository implements PlatformRepository {
     const key = input.tenantId + ":" + input.deviceId;
     const now = new Date().toISOString();
     const existing = this.devices.get(key);
-    const next: RegisteredDevice = {
+    if (existing && existing.userId !== input.userId) {
+      throw new ResourceConflictError("Device ID is already enrolled by another user");
+    }
+
+    const next: StoredDevice = {
+      tenantId: input.tenantId,
+      userId: input.userId,
       deviceId: input.deviceId,
       name: input.name,
       platform: input.platform,
       registeredAt: existing?.registeredAt ?? now,
       lastSeenAt: now,
-      ...(input.pushToken ? { pushToken: input.pushToken } : {})
+      ...(input.pushToken ? { pushToken: input.pushToken } : existing?.pushToken ? { pushToken: existing.pushToken } : {})
     };
     this.devices.set(key, next);
-    return next;
+    const { tenantId: _tenantId, userId: _userId, ...publicDevice } = next;
+    return publicDevice;
+  }
+
+  async listDevices(tenantId: string, userId: string): Promise<RegisteredDevice[]> {
+    return [...this.devices.values()]
+      .filter((device) => device.tenantId === tenantId && device.userId === userId)
+      .map(({ tenantId: _tenantId, userId: _userId, pushToken: _pushToken, ...device }) => structuredClone(device));
+  }
+
+  async revokeDevice(tenantId: string, userId: string, deviceId: string): Promise<void> {
+    const key = tenantId + ":" + deviceId;
+    const existing = this.devices.get(key);
+    if (!existing || existing.userId !== userId || existing.revokedAt) {
+      throw new ResourceNotFoundError("Active device does not exist");
+    }
+    this.devices.set(key, {
+      ...existing,
+      pushToken: undefined,
+      revokedAt: new Date().toISOString()
+    } as StoredDevice);
+  }
+
+  async getTenantOperationalHealth(tenantId: string, userId: string): Promise<TenantOperationalHealth> {
+    const devices = [...this.devices.values()].filter(
+      (device) => device.tenantId === tenantId && device.userId === userId
+    );
+    return {
+      plantCount: [...this.plants.values()].filter((plant) => plant.tenantId === tenantId).length,
+      activeDevices: devices.filter((device) => !device.revokedAt).length,
+      revokedDevices: devices.filter((device) => Boolean(device.revokedAt)).length
+    };
   }
 
   async claimPlantTag(input: PlantTagClaimInput): Promise<void> {
