@@ -596,7 +596,7 @@ export default function App() {
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
+      <StatusBar barStyle="light-content" />
       <View style={styles.binaryTop}>
         <Text style={styles.binaryText}>01000100 01010000 01001110 // BIOLOGICAL INTELLIGENCE NETWORK</Text>
       </View>
