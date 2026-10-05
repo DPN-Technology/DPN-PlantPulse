@@ -63,3 +63,23 @@ export class FixedAuthVerifier implements AuthVerifier {
     return this.context;
   }
 }
+
+export class DevelopmentAuthVerifier implements AuthVerifier {
+  async verifyAuthorizationHeader(header: string | undefined): Promise<AuthContext> {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("Development authentication is disabled in production");
+    }
+    if (!header) throw new Error("Authorization is required");
+    const [scheme, credential] = header.split(/\s+/, 2);
+    if (scheme?.toLowerCase() !== "bearer" || !credential?.startsWith("dev:")) {
+      throw new Error("Development credential is invalid");
+    }
+    const [, tenantId, userId] = credential.split(":");
+    if (!tenantId || !userId) throw new Error("Development credential is invalid");
+    return {
+      tenantId,
+      userId,
+      subject: userId
+    };
+  }
+}
