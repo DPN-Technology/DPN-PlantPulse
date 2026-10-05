@@ -274,6 +274,7 @@ export interface PlatformSyncSummary {
   failed: number;
   conflicts: number;
   claimedTags: number;
+  queuedNotifications: number;
   completedAt: string;
 }
 
