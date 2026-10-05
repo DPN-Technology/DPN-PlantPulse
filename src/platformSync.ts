@@ -75,8 +75,6 @@ export async function synchronizePlants(
   let failed = 0;
 
   const remoteRecords = await api.pullPlants();
-  const remoteById = new Map(remoteRecords.map((record) => [record.plant.id, record] as const));
-
   for (const remote of remoteRecords) {
     const index = plants.findIndex((plant) => plant.id === remote.plant.id);
     if (index < 0) {
