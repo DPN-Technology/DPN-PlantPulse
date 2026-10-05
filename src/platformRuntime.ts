@@ -4,6 +4,7 @@ import { mergeNotifications } from "./notificationEngine";
 import { getOrCreateClientDeviceId, clientDeviceName } from "./deviceIdentity";
 import { uploadPendingPlantMedia } from "./mediaSync";
 import { getPlatformRuntimeConfig, normalizePlatformBaseUrl } from "./platformConfig";
+import { refreshDpnOidcSession, revokeDpnOidcSession } from "./oidcIdentity";
 import {
   acceptRemoteConflictVersion,
   keepLocalConflictVersion,
@@ -36,6 +37,29 @@ function apiForState(state: PlatformState): DpnPlatformApiClient {
   });
 }
 
+async function renewIdentityForRuntime(state: PlatformState): Promise<PlatformState> {
+  if (isIdentitySessionUsable(state.identity)) return state;
+  if (state.identity.provider !== "oidc" || !state.identity.refreshToken) return state;
+
+  try {
+    const identity = await refreshDpnOidcSession(state.identity);
+    await persistSecureIdentitySession(identity);
+    return {
+      ...state,
+      identity,
+      lastSyncError: undefined
+    };
+  } catch (error) {
+    const identity = expireIdentitySession(state.identity);
+    await persistSecureIdentitySession(identity).catch(() => undefined);
+    return {
+      ...state,
+      identity,
+      lastSyncError: error instanceof Error ? error.message : "DPN Identity refresh failed."
+    };
+  }
+}
+
 function nextRetry(attempt: number): string {
   const delayMs = Math.min(15 * 60_000, 30_000 * Math.pow(2, Math.max(0, attempt - 1)));
   return new Date(Date.now() + delayMs).toISOString();
@@ -46,11 +70,11 @@ export async function restorePlatformRuntime(state: PlatformState): Promise<Plat
   const defaultBaseUrl = getPlatformRuntimeConfig().defaultBaseUrl;
 
   if (secure) {
-    return {
+    return renewIdentityForRuntime({
       ...state,
       identity: secure,
       platformBaseUrl: state.platformBaseUrl ?? defaultBaseUrl
-    };
+    });
   }
 
   const identity: DpnIdentitySession =
@@ -115,6 +139,11 @@ export async function installIdentitySession(
 }
 
 export async function disconnectPlatform(state: PlatformState): Promise<PlatformState> {
+  try {
+    await revokeDpnOidcSession(state.identity);
+  } catch {
+    // Local sign-out must still succeed if remote revocation is unavailable.
+  }
   await clearSecureIdentitySession();
   return {
     ...state,
@@ -152,11 +181,12 @@ export async function synchronizePlatformRuntime(
   const attempt = (state.syncAttempt ?? 0) + 1;
 
   try {
-    const api = apiForState(state);
+    const renewedState = await renewIdentityForRuntime(state);
+    const api = apiForState(renewedState);
     const media = await uploadPendingPlantMedia(inputPlants, api);
     const sync = await synchronizePlants(media.plants, api);
 
-    const claimed = new Set(state.claimedTagIds ?? []);
+    const claimed = new Set(renewedState.claimedTagIds ?? []);
     let claimedTags = 0;
     for (const plant of sync.plants) {
       if (!plant.plantTag || claimed.has(plant.plantTag.tagId)) continue;
@@ -172,9 +202,9 @@ export async function synchronizePlatformRuntime(
       }
     }
 
-    const device = await enrollDevice(api, state.device);
+    const device = await enrollDevice(api, renewedState.device);
     const conflictsByPlant = new Map<string, SyncConflict>();
-    for (const item of [...state.conflicts, ...sync.conflicts]) {
+    for (const item of [...renewedState.conflicts, ...sync.conflicts]) {
       conflictsByPlant.set(item.plantId, item);
     }
     const activeConflictIds = new Set(sync.plants.filter((plant) => plant.sync.state === "CONFLICT").map((plant) => plant.id));
@@ -185,11 +215,11 @@ export async function synchronizePlatformRuntime(
     return {
       plants: sync.plants,
       state: {
-        ...state,
+        ...renewedState,
         device,
         claimedTagIds: [...claimed],
         conflicts,
-        notifications: mergeNotifications(state.notifications, sync.notifications),
+        notifications: mergeNotifications(renewedState.notifications, sync.notifications),
         lastSyncAt: completedAt,
         lastSyncError: failed > 0 ? failed + " item(s) require retry." : undefined,
         lastSyncSummary: {
@@ -222,15 +252,16 @@ export async function synchronizePlatformRuntime(
 export async function registerPushAndDevice(
   state: PlatformState
 ): Promise<{ state: PlatformState; push: PushRegistrationResult }> {
+  const renewedState = await renewIdentityForRuntime(state);
   const push = await registerPlantPulsePushNotifications();
   if (push.status !== "REGISTERED" || !push.pushToken) {
-    return { state, push };
+    return { state: renewedState, push };
   }
 
-  const api = apiForState(state);
-  const device = await enrollDevice(api, state.device, push.pushToken);
+  const api = apiForState(renewedState);
+  const device = await enrollDevice(api, renewedState.device, push.pushToken);
   return {
-    state: { ...state, device },
+    state: { ...renewedState, device },
     push
   };
 }

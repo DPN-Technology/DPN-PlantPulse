@@ -2,7 +2,7 @@
   "expo": {
     "name": "DPN PlantPulse",
     "slug": "dpn-plantpulse",
-    "version": "0.8.0",
+    "version": "0.9.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "scheme": "plantpulse",

@@ -6,17 +6,21 @@ import { isIdentitySessionUsable } from "./identity";
 const SESSION_KEY = "dpn.plantpulse.identity.v1";
 
 export async function persistSecureIdentitySession(session: DpnIdentitySession): Promise<void> {
-  if (!isIdentitySessionUsable(session)) {
-    throw new Error("Cannot persist an unusable DPN identity session");
+  if (!session.accessToken && !session.refreshToken) {
+    throw new Error("Cannot persist a DPN identity session without renewable credentials");
   }
   if (Platform.OS === "web") return;
 
   await SecureStore.setItemAsync(
     SESSION_KEY,
     JSON.stringify({
+      provider: session.provider,
       profile: session.profile,
       accessToken: session.accessToken,
-      expiresAt: session.expiresAt
+      refreshToken: session.refreshToken,
+      expiresAt: session.expiresAt,
+      tokenType: session.tokenType,
+      scope: session.scope
     }),
     {
       keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK
@@ -33,15 +37,20 @@ export async function restoreSecureIdentitySession(): Promise<DpnIdentitySession
     const parsed = JSON.parse(raw) as Partial<DpnIdentitySession>;
     const session: DpnIdentitySession = {
       status: "AUTHENTICATED",
+      provider: parsed.provider,
       profile: parsed.profile,
       accessToken: parsed.accessToken,
-      expiresAt: parsed.expiresAt
+      refreshToken: parsed.refreshToken,
+      expiresAt: parsed.expiresAt,
+      tokenType: parsed.tokenType,
+      scope: parsed.scope
     };
-    if (!isIdentitySessionUsable(session)) {
-      await clearSecureIdentitySession();
-      return undefined;
+    if (isIdentitySessionUsable(session)) return session;
+    if (session.provider === "oidc" && session.refreshToken) {
+      return { ...session, status: "EXPIRED", accessToken: undefined };
     }
-    return session;
+    await clearSecureIdentitySession();
+    return undefined;
   } catch {
     return undefined;
   }

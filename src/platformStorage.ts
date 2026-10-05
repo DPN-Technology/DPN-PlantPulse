@@ -18,6 +18,7 @@ function normalizePlatformState(parsed: Partial<PlatformState>): PlatformState {
     identity: persistedIdentity?.profile
       ? {
           status: "DISCONNECTED",
+          provider: persistedIdentity.provider,
           profile: persistedIdentity.profile,
           expiresAt: persistedIdentity.expiresAt
         }
@@ -56,6 +57,7 @@ export async function savePlatformState(state: PlatformState): Promise<void> {
     ...state,
     identity: {
       status: state.identity.status,
+      provider: state.identity.provider,
       profile: state.identity.profile,
       expiresAt: state.identity.expiresAt
     }
