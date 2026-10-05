@@ -1,8 +1,9 @@
 import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import { getPlatformRuntimeConfig } from "./platformConfig";
-import { DpnIdentityProfile, DpnIdentitySession } from "./types";
+import { DpnIdentitySession } from "./types";
 import { isIdentitySessionUsable } from "./identity";
+import { oidcProfileFromClaims, oidcTokenExpiryIso } from "./oidcModel";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -25,36 +26,6 @@ function requiredOidcRuntime() {
     clientId: runtime.oidcClientId,
     scopes: runtime.oidcScopes,
     tenantClaim: runtime.oidcTenantClaim
-  };
-}
-
-function sessionExpiry(issuedAt?: number, expiresIn?: number): string {
-  const baseSeconds = issuedAt ?? Math.floor(Date.now() / 1000);
-  const lifetimeSeconds = expiresIn ?? 3600;
-  return new Date((baseSeconds + lifetimeSeconds) * 1000).toISOString();
-}
-
-function stringClaim(source: Record<string, unknown>, key: string): string | undefined {
-  const value = source[key];
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
-function profileFromUserInfo(
-  info: Record<string, unknown>,
-  tenantClaim: string
-): DpnIdentityProfile {
-  const userId = stringClaim(info, "sub");
-  if (!userId) throw new Error("DPN Identity user-info response did not include sub.");
-
-  return {
-    userId,
-    displayName:
-      stringClaim(info, "name") ??
-      stringClaim(info, "preferred_username") ??
-      stringClaim(info, "email") ??
-      userId,
-    ...(stringClaim(info, "email") ? { email: stringClaim(info, "email") } : {}),
-    ...(stringClaim(info, tenantClaim) ? { tenantId: stringClaim(info, tenantClaim) } : {})
   };
 }
 
@@ -113,18 +84,15 @@ export async function signInWithDpnOidc(
   }, client.discovery);
 
   const runtime = requiredOidcRuntime();
-  let profile: DpnIdentityProfile = {
-    userId: "oidc-session",
-    displayName: "DPN Identity"
-  };
-
-  if (client.discovery.userInfoEndpoint) {
-    const info = await AuthSession.fetchUserInfoAsync(
-      { accessToken: token.accessToken },
-      client.discovery
-    );
-    profile = profileFromUserInfo(info as Record<string, unknown>, runtime.tenantClaim);
+  if (!client.discovery.userInfoEndpoint) {
+    throw new Error("DPN Identity discovery document is missing the UserInfo endpoint.");
   }
+
+  const info = await AuthSession.fetchUserInfoAsync(
+    { accessToken: token.accessToken },
+    client.discovery
+  );
+  const profile = oidcProfileFromClaims(info as Record<string, unknown>, runtime.tenantClaim);
 
   return {
     status: "AUTHENTICATED",
@@ -132,7 +100,7 @@ export async function signInWithDpnOidc(
     profile,
     accessToken: token.accessToken,
     ...(token.refreshToken ? { refreshToken: token.refreshToken } : {}),
-    expiresAt: sessionExpiry(token.issuedAt, token.expiresIn),
+    expiresAt: oidcTokenExpiryIso(token.issuedAt, token.expiresIn),
     ...(token.tokenType ? { tokenType: token.tokenType } : {}),
     ...(token.scope ? { scope: token.scope } : {})
   };
@@ -167,7 +135,7 @@ export async function refreshDpnOidcSession(
     provider: "oidc",
     accessToken: token.accessToken,
     refreshToken: token.refreshToken ?? session.refreshToken,
-    expiresAt: sessionExpiry(token.issuedAt, token.expiresIn),
+    expiresAt: oidcTokenExpiryIso(token.issuedAt, token.expiresIn),
     ...(token.tokenType ? { tokenType: token.tokenType } : {}),
     ...(token.scope ? { scope: token.scope } : {})
   };
