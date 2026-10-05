@@ -277,6 +277,15 @@ export interface PlatformSyncSummary {
   completedAt: string;
 }
 
+export interface BackgroundSyncState {
+  availability: "UNKNOWN" | "AVAILABLE" | "RESTRICTED";
+  registered: boolean;
+  registeredAt?: string;
+  lastRunAt?: string;
+  lastResult?: "SUCCESS" | "FAILED" | "SKIPPED";
+  lastError?: string;
+}
+
 export interface PlatformState {
   identity: DpnIdentitySession;
   platformBaseUrl?: string;
@@ -289,6 +298,7 @@ export interface PlatformState {
   lastSyncSummary?: PlatformSyncSummary;
   syncAttempt?: number;
   nextRetryAt?: string;
+  backgroundSync?: BackgroundSyncState;
 }
 
 export interface PlantTag {
