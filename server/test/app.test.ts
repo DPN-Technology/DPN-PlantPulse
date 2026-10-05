@@ -64,7 +64,7 @@ test("health is public and reports service version", async () => {
   assert.deepEqual(response.json(), {
     service: "dpn-plantpulse-platform",
     status: "ok",
-    version: "0.10.0"
+    version: "0.11.0"
   });
   await server.close();
 });
@@ -308,5 +308,183 @@ test("notification queue is tenant-user scoped and deduplicated by source", asyn
   assert.equal(second.json().queued, 0);
   assert.equal(outbox.snapshot().length, 1);
   assert.equal(outbox.snapshot()[0]!.deviceId, "phone-1");
+  await server.close();
+});
+
+
+test("device trust blocks cross-user takeover and revoked device reactivation", async () => {
+  const repository = new InMemoryPlatformRepository();
+  const server = await createPlatformApp({
+    repository,
+    objectStore: new TestObjectStore(),
+    authVerifier: new HeaderAuthVerifier()
+  });
+  const userA = { authorization: "Bearer tenant-a:user-a" };
+  const userB = { authorization: "Bearer tenant-a:user-b" };
+
+  const enrolled = await server.inject({
+    method: "POST",
+    url: "/v1/devices",
+    headers: userA,
+    payload: { deviceId: "shared-phone", name: "Phone A", platform: "android" }
+  });
+  assert.equal(enrolled.statusCode, 201);
+
+  const takeover = await server.inject({
+    method: "POST",
+    url: "/v1/devices",
+    headers: userB,
+    payload: { deviceId: "shared-phone", name: "Phone B", platform: "android" }
+  });
+  assert.equal(takeover.statusCode, 409);
+
+  const revoked = await server.inject({
+    method: "DELETE",
+    url: "/v1/devices/shared-phone",
+    headers: userA
+  });
+  assert.equal(revoked.statusCode, 204);
+
+  const listed = await server.inject({ method: "GET", url: "/v1/devices", headers: userA });
+  assert.equal(listed.statusCode, 200);
+  assert.equal(listed.json().length, 1);
+  assert.ok(listed.json()[0].revokedAt);
+
+  const silentReactivation = await server.inject({
+    method: "POST",
+    url: "/v1/devices",
+    headers: userA,
+    payload: { deviceId: "shared-phone", name: "Phone A", platform: "android" }
+  });
+  assert.equal(silentReactivation.statusCode, 409);
+  await server.close();
+});
+
+test("notification preferences validate policy and suppress disabled categories", async () => {
+  const outbox = new InMemoryNotificationOutboxRepository();
+  outbox.addDevice("tenant-a", "user-a", "phone-1", "ExponentPushToken[test]");
+  const server = await app(outbox);
+  const headers = { authorization: "Bearer tenant-a:user-a" };
+
+  const saved = await server.inject({
+    method: "PUT",
+    url: "/v1/notification-preferences",
+    headers,
+    payload: {
+      care: false,
+      prediction: true,
+      sensor: true,
+      sync: true,
+      security: true,
+      quietHoursEnabled: true,
+      quietStart: "22:00",
+      quietEnd: "07:00",
+      timeZone: "America/Detroit"
+    }
+  });
+  assert.equal(saved.statusCode, 200);
+  assert.equal(saved.json().care, false);
+
+  const read = await server.inject({
+    method: "GET",
+    url: "/v1/notification-preferences",
+    headers
+  });
+  assert.equal(read.statusCode, 200);
+  assert.equal(read.json().timeZone, "America/Detroit");
+
+  const care = await server.inject({
+    method: "POST",
+    url: "/v1/notifications/queue",
+    headers,
+    payload: {
+      notifications: [{
+        sourceId: "care-disabled",
+        kind: "CARE",
+        title: "Care",
+        body: "Suppressed"
+      }]
+    }
+  });
+  assert.equal(care.statusCode, 202);
+  assert.equal(care.json().queued, 0);
+
+  const sensor = await server.inject({
+    method: "POST",
+    url: "/v1/notifications/queue",
+    headers,
+    payload: {
+      notifications: [{
+        sourceId: "sensor-enabled",
+        kind: "SENSOR",
+        title: "Sensor",
+        body: "Enabled"
+      }]
+    }
+  });
+  assert.equal(sensor.statusCode, 202);
+  assert.equal(sensor.json().queued, 1);
+
+  const invalid = await server.inject({
+    method: "PUT",
+    url: "/v1/notification-preferences",
+    headers,
+    payload: {
+      care: true,
+      prediction: true,
+      sensor: true,
+      sync: true,
+      security: true,
+      quietHoursEnabled: true,
+      quietStart: "22:00",
+      quietEnd: "22:00",
+      timeZone: "Invalid/Timezone"
+    }
+  });
+  assert.equal(invalid.statusCode, 400);
+  await server.close();
+});
+
+test("operations health is authenticated and tenant-user scoped", async () => {
+  const repository = new InMemoryPlatformRepository();
+  const outbox = new InMemoryNotificationOutboxRepository();
+  outbox.addDevice("tenant-a", "user-a", "push-phone", "ExponentPushToken[test]");
+  await repository.registerDevice({
+    tenantId: "tenant-a",
+    userId: "user-a",
+    deviceId: "trusted-phone",
+    name: "Trusted",
+    platform: "android"
+  });
+  await repository.pushPlant({
+    tenantId: "tenant-a",
+    actorUserId: "user-a",
+    plantId: "plant-health",
+    plant: plant("plant-health", "Health Plant"),
+    clientRevision: 1
+  });
+  await outbox.enqueueForUser({
+    tenantId: "tenant-a",
+    userId: "user-a",
+    items: [{ sourceId: "health-push", kind: "SYNC", title: "Sync", body: "Queued" }]
+  });
+
+  const server = await createPlatformApp({
+    repository,
+    notificationRepository: outbox,
+    objectStore: new TestObjectStore(),
+    authVerifier: new HeaderAuthVerifier()
+  });
+  const response = await server.inject({
+    method: "GET",
+    url: "/v1/operations/health",
+    headers: { authorization: "Bearer tenant-a:user-a" }
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().plantCount, 1);
+  assert.equal(response.json().activeDevices, 1);
+  assert.equal(response.json().push.pending, 1);
+  assert.ok(response.json().generatedAt);
   await server.close();
 });
