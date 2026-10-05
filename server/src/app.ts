@@ -1,4 +1,5 @@
 import Fastify, { FastifyReply, FastifyRequest } from "fastify";
+import rateLimit from "@fastify/rate-limit";
 import { AuthVerifier } from "./auth.js";
 import { ObjectStore } from "./objectStore.js";
 import { PlatformRepository } from "./repository.js";
@@ -16,6 +17,8 @@ export interface PlatformAppOptions {
   objectStore: ObjectStore;
   authVerifier: AuthVerifier;
   logger?: boolean;
+  rateLimitMax?: number;
+  rateLimitTimeWindow?: string;
 }
 
 function isRecord(value: unknown): value is JsonObject {
@@ -88,6 +91,18 @@ export function createPlatformApp(options: PlatformAppOptions) {
     logger: options.logger ?? false,
     bodyLimit: 2 * 1024 * 1024,
     requestIdHeader: "x-request-id"
+  });
+
+  app.register(rateLimit, {
+    max: options.rateLimitMax ?? 120,
+    timeWindow: options.rateLimitTimeWindow ?? "1 minute",
+    hook: "onRequest",
+    addHeaders: {
+      "x-ratelimit-limit": true,
+      "x-ratelimit-remaining": true,
+      "x-ratelimit-reset": true,
+      "retry-after": true
+    }
   });
 
   app.addHook("onSend", async (_request, reply, payload) => {
