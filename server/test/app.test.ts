@@ -652,7 +652,7 @@ test("operations health is authenticated and tenant-user scoped", async () => {
 
 
 test("observability exposes correlated Prometheus metrics and DPN control health", async () => {
-  const observability = new PlantPulseObservability("0.12.0");
+  const observability = new PlantPulseObservability("0.13.0");
   const notificationRepository = new InMemoryNotificationOutboxRepository();
   const server = await createPlatformApp({
     repository: new InMemoryPlatformRepository(),
@@ -680,7 +680,7 @@ test("observability exposes correlated Prometheus metrics and DPN control health
   assert.equal(control.json().productId, "DPN-PLANTPULSE");
   assert.equal(control.json().integrationId, "DPN-PLANTPULSE");
   assert.equal(control.json().status, "ONLINE");
-  assert.equal(control.json().version, "0.12.0");
+  assert.equal(control.json().version, "0.13.0");
   assert.equal(control.json().readiness.database, true);
   assert.equal(control.json().readiness.notificationOutbox, true);
   assert.ok(control.json().reliability.slo.targets.apiP95Milliseconds);
@@ -690,7 +690,7 @@ test("observability exposes correlated Prometheus metrics and DPN control health
 
 test("sync operation reports require an enrolled device and surface in operations health", async () => {
   const repository = new InMemoryPlatformRepository();
-  const observability = new PlantPulseObservability("0.12.0");
+  const observability = new PlantPulseObservability("0.13.0");
   const server = await createPlatformApp({
     repository,
     objectStore: new TestObjectStore(),
