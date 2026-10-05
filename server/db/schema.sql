@@ -122,3 +122,19 @@ create table if not exists notification_preferences (
   primary key (tenant_id, user_id),
   check (quiet_start <> quiet_end)
 );
+
+
+create table if not exists client_operation_reports (
+  tenant_id text not null,
+  user_id text not null,
+  device_id text not null,
+  operation text not null check (operation in ('SYNC', 'BACKGROUND_SYNC')),
+  result text not null check (result in ('SUCCESS', 'FAILED', 'SKIPPED')),
+  detail jsonb not null default '{}'::jsonb,
+  observed_at timestamptz not null,
+  received_at timestamptz not null default now(),
+  primary key (tenant_id, user_id, device_id, operation)
+);
+
+create index if not exists client_operation_reports_recent_idx
+  on client_operation_reports (tenant_id, user_id, operation, observed_at desc);
