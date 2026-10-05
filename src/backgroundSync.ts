@@ -108,6 +108,7 @@ export async function unregisterPlantPulseBackgroundSync(
   }
   return {
     ...previous,
+    availability: previous?.availability ?? "UNKNOWN",
     registered: false
   };
 }
