@@ -21,6 +21,9 @@ A plant is the durable identity for one owned plant. It contains:
 - registered sensor devices
 - bounded measured sensor-reading history
 - sensor alerts and acknowledgement state
+- local/remote sync revision metadata
+- PlantPulse tag assignment
+- cloud image object references
 
 ## Scan history
 
@@ -61,10 +64,10 @@ The same pattern is used for feeding. Pruning and inspections create durable tim
 v0.4 stores records under:
 
 ```text
-@dpn_plantpulse/plants/v5
+@dpn_plantpulse/plants/v6
 ```
 
-On first load, the app checks v5 first, then v4, v3, v2, and v1. Older records are normalized into the current schema. Missing scan metadata, care-plan fields, and recommendation feedback, sensor devices, readings, and alerts are filled with safe defaults before the migrated record is written to v5.
+On first load, the app checks v6 first, then v5, v4, v3, v2, and v1. Older records are normalized into the current schema. Missing scan metadata, care-plan fields, and recommendation feedback, sensor devices, readings, alerts, and sync metadata are filled with safe defaults before the migrated record is written to v6.
 
 ## Service boundary
 
