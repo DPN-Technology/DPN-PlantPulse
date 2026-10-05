@@ -2,6 +2,9 @@ import { PlatformRepository } from "./repository.js";
 import {
   CloudPlantRecord,
   DeviceRegistrationInput,
+  MediaCleanupCandidate,
+  MediaReservationInput,
+  MediaUploadRecord,
   OperationReportInput,
   PlantTagClaimInput,
   PushPlantInput,
@@ -25,6 +28,19 @@ interface StoredDevice extends RegisteredDevice {
   userId: string;
 }
 
+function collectCloudMediaKeys(value: unknown, keys = new Set<string>()): Set<string> {
+  if (Array.isArray(value)) {
+    for (const item of value) collectCloudMediaKeys(item, keys);
+    return keys;
+  }
+  if (!value || typeof value !== "object") return keys;
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    if (key === "cloudImageKey" && typeof child === "string" && child.trim()) keys.add(child.trim());
+    else collectCloudMediaKeys(child, keys);
+  }
+  return keys;
+}
+
 interface StoredTag {
   tenantId: string;
   plantId: string;
@@ -35,6 +51,7 @@ export class InMemoryPlatformRepository implements PlatformRepository {
   private readonly devices = new Map<string, StoredDevice>();
   private readonly tags = new Map<string, StoredTag>();
   private readonly operationReports = new Map<string, OperationReportInput>();
+  private readonly mediaUploads = new Map<string, MediaUploadRecord>();
 
   async ping(): Promise<void> {}
 
@@ -54,6 +71,7 @@ export class InMemoryPlatformRepository implements PlatformRepository {
     const key = input.tenantId + ":" + input.plantId;
     const existing = this.plants.get(key);
     const now = new Date().toISOString();
+    this.validateAndReconcileMedia(input, existing?.plant);
 
     if (!existing) {
       if (input.baseRemoteRevision !== undefined && input.baseRemoteRevision !== 0) {
@@ -137,6 +155,9 @@ export class InMemoryPlatformRepository implements PlatformRepository {
     const latestSync = reports.find((report) => report.operation === "SYNC");
     const latestBackground = reports.find((report) => report.operation === "BACKGROUND_SYNC");
 
+    const media = [...this.mediaUploads.values()].filter(
+      (item) => item.tenantId === tenantId && item.userId === userId
+    );
     return {
       plantCount: [...this.plants.values()].filter((plant) => plant.tenantId === tenantId).length,
       activeDevices: devices.filter((device) => !device.revokedAt).length,
@@ -153,6 +174,13 @@ export class InMemoryPlatformRepository implements PlatformRepository {
         failedDevices: new Set(
           reports.filter((report) => report.result === "FAILED").map((report) => report.deviceId)
         ).size
+      },
+      media: {
+        reserved: media.filter((item) => item.status === "RESERVED").length,
+        verified: media.filter((item) => item.status === "VERIFIED").length,
+        attached: media.filter((item) => item.status === "ATTACHED").length,
+        deleteRetry: media.filter((item) => item.status === "DELETE_RETRY").length,
+        deleted: media.filter((item) => item.status === "DELETED").length
       }
     };
   }
@@ -162,6 +190,165 @@ export class InMemoryPlatformRepository implements PlatformRepository {
     const existing = this.operationReports.get(key);
     if (!existing || existing.observedAt <= input.observedAt) {
       this.operationReports.set(key, structuredClone(input));
+    }
+  }
+
+  async createMediaReservation(input: MediaReservationInput): Promise<MediaUploadRecord> {
+    const now = new Date().toISOString();
+    const record: MediaUploadRecord = {
+      uploadId: input.uploadId,
+      tenantId: input.tenantId,
+      userId: input.userId,
+      plantId: input.plantId,
+      mediaKind: input.mediaKind,
+      objectKey: input.objectKey,
+      contentType: input.contentType,
+      expectedByteLength: input.expectedByteLength,
+      status: "RESERVED",
+      createdAt: now,
+      expiresAt: input.expiresAt,
+      cleanupAttemptCount: 0,
+      nextCleanupAt: input.expiresAt
+    };
+    this.mediaUploads.set(input.uploadId, record);
+    return structuredClone(record);
+  }
+
+  async getMediaUpload(tenantId: string, userId: string, uploadId: string): Promise<MediaUploadRecord> {
+    const record = this.mediaUploads.get(uploadId);
+    if (!record || record.tenantId !== tenantId || record.userId !== userId) {
+      throw new ResourceNotFoundError("Media upload does not exist");
+    }
+    return structuredClone(record);
+  }
+
+  async markMediaVerified(
+    tenantId: string,
+    userId: string,
+    uploadId: string,
+    actualByteLength: number,
+    etag?: string
+  ): Promise<MediaUploadRecord> {
+    const record = await this.getMediaUpload(tenantId, userId, uploadId);
+    if (record.status !== "RESERVED") {
+      throw new ResourceConflictError("Media upload is not awaiting verification");
+    }
+    if (record.expiresAt <= new Date().toISOString()) {
+      throw new ResourceConflictError("Media upload grant has expired");
+    }
+    const next: MediaUploadRecord = {
+      ...record,
+      actualByteLength,
+      ...(etag ? { etag } : {}),
+      status: "VERIFIED",
+      verifiedAt: new Date().toISOString(),
+      nextCleanupAt: new Date().toISOString()
+    };
+    this.mediaUploads.set(uploadId, next);
+    return structuredClone(next);
+  }
+
+  async markMediaDeleted(tenantId: string, userId: string, uploadId: string): Promise<void> {
+    const record = await this.getMediaUpload(tenantId, userId, uploadId);
+    if (record.status === "ATTACHED") {
+      throw new ResourceConflictError("Detach media from the plant before deletion");
+    }
+    if (record.status === "DELETED") return;
+    this.mediaUploads.set(uploadId, {
+      ...record,
+      status: "DELETED",
+      deletedAt: new Date().toISOString()
+    });
+  }
+
+  async leaseMediaCleanup(limit: number, orphanBefore: Date): Promise<MediaCleanupCandidate[]> {
+    const now = new Date();
+    const candidates = [...this.mediaUploads.values()]
+      .filter((record) =>
+        (record.status === "RESERVED" && new Date(record.expiresAt) <= now) ||
+        (record.status === "VERIFIED" &&
+          new Date(record.detachedAt ?? record.verifiedAt ?? record.createdAt) <= orphanBefore) ||
+        (record.status === "DELETE_RETRY" && new Date(record.nextCleanupAt) <= now)
+      )
+      .slice(0, limit);
+
+    return candidates.map((record) => {
+      const next: MediaUploadRecord = {
+        ...record,
+        status: "DELETE_PENDING",
+        cleanupAttemptCount: record.cleanupAttemptCount + 1,
+        nextCleanupAt: new Date(Date.now() + 5 * 60_000).toISOString()
+      };
+      this.mediaUploads.set(record.uploadId, next);
+      return {
+        uploadId: record.uploadId,
+        objectKey: record.objectKey,
+        tenantId: record.tenantId,
+        userId: record.userId,
+        plantId: record.plantId,
+        status: record.status,
+        cleanupAttemptCount: next.cleanupAttemptCount
+      };
+    });
+  }
+
+  async markMediaCleanupRetry(uploadId: string, error: string, nextAttemptAt: Date): Promise<void> {
+    const record = this.mediaUploads.get(uploadId);
+    if (!record) return;
+    this.mediaUploads.set(uploadId, {
+      ...record,
+      status: "DELETE_RETRY",
+      lastError: error.slice(0, 2000),
+      nextCleanupAt: nextAttemptAt.toISOString()
+    });
+  }
+
+  async markMediaCleanupDeleted(uploadId: string): Promise<void> {
+    const record = this.mediaUploads.get(uploadId);
+    if (!record) return;
+    this.mediaUploads.set(uploadId, {
+      ...record,
+      status: "DELETED",
+      deletedAt: new Date().toISOString()
+    });
+  }
+
+  private validateAndReconcileMedia(input: PushPlantInput, previousPlant?: Record<string, unknown>): void {
+    const incoming = collectCloudMediaKeys(input.plant);
+    const previous = collectCloudMediaKeys(previousPlant);
+
+    for (const key of incoming) {
+      if (previous.has(key)) continue;
+      const record = [...this.mediaUploads.values()].find(
+        (item) =>
+          item.tenantId === input.tenantId &&
+          item.plantId === input.plantId &&
+          item.objectKey === key &&
+          (item.status === "VERIFIED" || item.status === "ATTACHED")
+      );
+      if (!record) {
+        throw new ResourceConflictError("Plant contains a cloud media reference that is not verified for this plant");
+      }
+    }
+
+    for (const record of this.mediaUploads.values()) {
+      if (record.tenantId !== input.tenantId || record.plantId !== input.plantId) continue;
+      if (incoming.has(record.objectKey) && (record.status === "VERIFIED" || record.status === "ATTACHED")) {
+        this.mediaUploads.set(record.uploadId, {
+          ...record,
+          status: "ATTACHED",
+          attachedAt: record.attachedAt ?? new Date().toISOString(),
+          detachedAt: undefined
+        } as MediaUploadRecord);
+      } else if (!incoming.has(record.objectKey) && record.status === "ATTACHED") {
+        this.mediaUploads.set(record.uploadId, {
+          ...record,
+          status: "VERIFIED",
+          attachedAt: undefined,
+          detachedAt: new Date().toISOString(),
+          nextCleanupAt: new Date().toISOString()
+        } as MediaUploadRecord);
+      }
     }
   }
 
