@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "product_id": "DPN-PLANTPULSE",
+  "name": "DPN PlantPulse",
+  "repository": {
+    "full_name": "DPN-Technology/DPN-PlantPulse",
+    "default_branch": "main"
+  },
+  "security": {
+    "tier": "B",
+    "required_gates": [
+      "ci",
+      "sast",
+      "dependencies",
+      "workflow_security"
+    ]
+  },
+  "runtime": {
+    "mode": "persistent-service",
+    "integration_id": "DPN-PLANTPULSE",
+    "version_source": "server/package.json",
+    "capabilities": [
+      "health_check",
+      "collect_diagnostics"
+    ],
+    "telemetry": [
+      "health",
+      "version",
+      "readiness",
+      "http",
+      "authentication",
+      "synchronization",
+      "background_sync",
+      "push_delivery",
+      "revision_conflicts"
+    ]
+  },
+  "release": {
+    "artifact_types": [
+      "source",
+      "container"
+    ],
+    "requires_sbom": false,
+    "requires_provenance": false
+  },
+  "ownership": {
+    "owner": "DPN Technology",
+    "third_party_licenses": null
+  }
+}
