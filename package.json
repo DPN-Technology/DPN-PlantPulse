@@ -1,6 +1,6 @@
 {
   "name": "dpn-plantpulse",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
@@ -13,7 +13,8 @@
     "server:typecheck": "npm run typecheck --workspace @dpn/plantpulse-platform",
     "server:test": "npm run test --workspace @dpn/plantpulse-platform",
     "server:build": "npm run build --workspace @dpn/plantpulse-platform",
-    "server:migrate": "npm run db:migrate --workspace @dpn/plantpulse-platform"
+    "server:migrate": "npm run db:migrate --workspace @dpn/plantpulse-platform",
+    "test:mobile-platform": "tsx --test test-mobile/**/*.test.ts"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -21,11 +22,16 @@
     "expo-camera": "~57.0.6",
     "expo-image-picker": "~57.0.20",
     "react": "19.2.3",
-    "react-native": "0.86.3"
+    "react-native": "0.86.3",
+    "expo-secure-store": "~57.0.4",
+    "expo-notifications": "~57.0.21",
+    "expo-constants": "~57.0.20",
+    "expo-device": "~57.0.2"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "tsx": "^4.0.0"
   },
   "engines": {
     "node": ">=22.13.0"

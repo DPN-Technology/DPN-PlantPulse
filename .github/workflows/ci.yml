@@ -29,6 +29,8 @@ jobs:
         run: npm run server:typecheck
       - name: Platform build
         run: npm run server:build
+      - name: Mobile platform connectivity tests
+        run: npm run test:mobile-platform
       - name: Expo Doctor
         run: npx expo-doctor
       - name: Critical dependency audit

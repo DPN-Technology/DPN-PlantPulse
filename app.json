@@ -2,13 +2,16 @@
   "expo": {
     "name": "DPN PlantPulse",
     "slug": "dpn-plantpulse",
-    "version": "0.7.0",
+    "version": "0.8.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "scheme": "plantpulse",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "technology.dpn.plantpulse"
+      "bundleIdentifier": "technology.dpn.plantpulse",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "technology.dpn.plantpulse",
@@ -34,6 +37,19 @@
           "photosPermission": "Allow DPN PlantPulse to access plant photos you choose for analysis.",
           "cameraPermission": "Allow DPN PlantPulse to capture plant photos for analysis.",
           "microphonePermission": false
+        }
+      ],
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": true,
+          "faceIDPermission": "Allow DPN PlantPulse to securely protect your DPN session."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "plantpulse"
         }
       ]
     ]

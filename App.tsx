@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -32,6 +33,15 @@ import {
 import { buildLocalNotifications, mergeNotifications } from "./src/notificationEngine";
 import { createPlantTag, parsePlantTagPayload } from "./src/plantTags";
 import { defaultPlatformState, loadPlatformState, savePlatformState } from "./src/platformStorage";
+import {
+  connectDevelopmentPlatform,
+  disconnectPlatform,
+  registerPushAndDevice,
+  resolvePlatformConflict,
+  restorePlatformRuntime,
+  shouldAutoRetryPlatformSync,
+  synchronizePlatformRuntime
+} from "./src/platformRuntime";
 import { plantIntelligenceClient } from "./src/services/plantIntelligence";
 import { getSpeciesCareBaseline } from "./src/speciesCare";
 import {
@@ -52,7 +62,8 @@ import {
   SensorReading,
   ScanMode,
   ScanResult,
-  Screen
+  Screen,
+  SyncConflict
 } from "./src/types";
 
 const modes: Array<{ key: ScanMode; label: string }> = [
@@ -102,6 +113,7 @@ export default function App() {
   const [loaded, setLoaded] = useState(false);
   const [platformLoaded, setPlatformLoaded] = useState(false);
   const [platformState, setPlatformState] = useState<PlatformState>(defaultPlatformState);
+  const [platformSyncing, setPlatformSyncing] = useState(false);
 
   useEffect(() => {
     loadPlants(seedPlants).then((stored) => {
@@ -116,10 +128,13 @@ export default function App() {
   }, [plants, loaded]);
 
   useEffect(() => {
-    loadPlatformState().then((stored) => {
-      setPlatformState(stored);
-      setPlatformLoaded(true);
-    });
+    loadPlatformState()
+      .then((stored) => restorePlatformRuntime(stored))
+      .then((restored) => {
+        setPlatformState(restored);
+        setPlatformLoaded(true);
+      })
+      .catch(() => setPlatformLoaded(true));
   }, []);
 
   useEffect(() => {
@@ -236,6 +251,96 @@ export default function App() {
     }));
   };
 
+  const runPlatformSync = async (showResult = true) => {
+    if (platformSyncing) return;
+    setPlatformSyncing(true);
+    try {
+      const result = await synchronizePlatformRuntime(plants, platformState);
+      setPlants(result.plants);
+      setPlatformState(result.state);
+
+      if (showResult) {
+        const summary = result.state.lastSyncSummary;
+        if (result.state.lastSyncError && !summary) {
+          Alert.alert("DPN Platform sync failed", result.state.lastSyncError);
+        } else if (summary) {
+          Alert.alert(
+            summary.failed > 0 || summary.conflicts > 0 ? "DPN Platform sync needs attention" : "DPN Platform synchronized",
+            "Pushed " + summary.pushed +
+              " • Pulled " + summary.pulled +
+              " • Images " + summary.uploadedImages +
+              " • Conflicts " + summary.conflicts +
+              (summary.failed > 0 ? " • Retry " + summary.failed : "")
+          );
+        }
+      }
+    } finally {
+      setPlatformSyncing(false);
+    }
+  };
+
+  const connectDevelopmentRuntime = async (baseUrl: string, tenantId: string, userId: string) => {
+    try {
+      const next = await connectDevelopmentPlatform(platformState, baseUrl, tenantId, userId);
+      setPlatformState(next);
+      Alert.alert("DPN Platform connected", "Development identity is stored in native SecureStore for this device.");
+    } catch (error) {
+      Alert.alert("Connection failed", error instanceof Error ? error.message : "Could not connect to DPN Platform.");
+    }
+  };
+
+  const disconnectPlatformRuntime = async () => {
+    const next = await disconnectPlatform(platformState);
+    setPlatformState(next);
+  };
+
+  const registerPushRuntime = async () => {
+    try {
+      const result = await registerPushAndDevice(platformState);
+      setPlatformState(result.state);
+      Alert.alert(
+        result.push.status === "REGISTERED" ? "Push enrollment ready" : "Push enrollment",
+        result.push.detail
+      );
+    } catch (error) {
+      Alert.alert("Push enrollment failed", error instanceof Error ? error.message : "Could not enroll this device.");
+    }
+  };
+
+  const resolveConflictRuntime = (conflict: SyncConflict, strategy: "KEEP_LOCAL" | "USE_REMOTE") => {
+    try {
+      const result = resolvePlatformConflict(plants, platformState, conflict, strategy);
+      setPlants(result.plants);
+      setPlatformState(result.state);
+    } catch (error) {
+      Alert.alert("Conflict resolution failed", error instanceof Error ? error.message : "Could not resolve conflict.");
+    }
+  };
+
+  useEffect(() => {
+    if (!loaded || !platformLoaded || platformSyncing) return;
+
+    const attempt = () => {
+      if (shouldAutoRetryPlatformSync(plants, platformState)) {
+        void runPlatformSync(false);
+      }
+    };
+
+    attempt();
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") attempt();
+    });
+    return () => subscription.remove();
+  }, [
+    loaded,
+    platformLoaded,
+    platformSyncing,
+    plants,
+    platformState.identity.status,
+    platformState.platformBaseUrl,
+    platformState.nextRetryAt
+  ]);
+
   const averageScore = Math.round(plants.reduce((sum, plant) => sum + plant.healthScore, 0) / Math.max(1, plants.length));
   const attention = plants.filter((plant) => plant.healthScore < 75);
   const dueCare = plants.filter((plant) => daysUntil(plant.nextWaterAt) <= 1 || daysUntil(plant.nextFeedAt) <= 1);
@@ -309,8 +414,14 @@ export default function App() {
         <PlatformScreen
           plants={plants}
           platformState={platformState}
+          syncing={platformSyncing}
           onOpenPlant={openPlant}
           onReadNotification={markNotificationRead}
+          onSync={() => void runPlatformSync(true)}
+          onConnectDevelopment={(baseUrl, tenantId, userId) => void connectDevelopmentRuntime(baseUrl, tenantId, userId)}
+          onDisconnect={() => void disconnectPlatformRuntime()}
+          onRegisterPush={() => void registerPushRuntime()}
+          onResolveConflict={resolveConflictRuntime}
         />
       );
     }
@@ -1473,17 +1584,36 @@ function SensorNetworkScreen({
 function PlatformScreen({
   plants,
   platformState,
+  syncing,
   onOpenPlant,
-  onReadNotification
+  onReadNotification,
+  onSync,
+  onConnectDevelopment,
+  onDisconnect,
+  onRegisterPush,
+  onResolveConflict
 }: {
   plants: Plant[];
   platformState: PlatformState;
+  syncing: boolean;
   onOpenPlant: (plantId: string) => void;
   onReadNotification: (notificationId: string) => void;
+  onSync: () => void;
+  onConnectDevelopment: (baseUrl: string, tenantId: string, userId: string) => void;
+  onDisconnect: () => void;
+  onRegisterPush: () => void;
+  onResolveConflict: (conflict: SyncConflict, strategy: "KEEP_LOCAL" | "USE_REMOTE") => void;
 }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanningTag, setScanningTag] = useState(false);
   const [scanLocked, setScanLocked] = useState(false);
+  const [endpoint, setEndpoint] = useState(platformState.platformBaseUrl ?? "");
+  const [tenantId, setTenantId] = useState(platformState.identity.profile?.tenantId ?? "dpn-local");
+  const [userId, setUserId] = useState(platformState.identity.profile?.userId ?? "developer");
+
+  useEffect(() => {
+    if (platformState.platformBaseUrl) setEndpoint(platformState.platformBaseUrl);
+  }, [platformState.platformBaseUrl]);
 
   const synced = plants.filter((plant) => plant.sync.state === "SYNCED").length;
   const pending = plants.filter((plant) => ["LOCAL_ONLY", "DIRTY", "ERROR"].includes(plant.sync.state)).length;
@@ -1496,6 +1626,9 @@ function PlatformScreen({
     0
   );
   const unread = platformState.notifications.filter((item) => !item.readAt);
+  const configured = Boolean(platformState.platformBaseUrl);
+  const authenticated = platformState.identity.status === "AUTHENTICATED";
+  const summary = platformState.lastSyncSummary;
 
   const handleTagScan = ({ data }: { data: string }) => {
     if (scanLocked) return;
@@ -1524,9 +1657,9 @@ function PlatformScreen({
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
       <DpnHeader
-        eyebrow="DPN PLANTPULSE // PLATFORM V0.6"
+        eyebrow="DPN PLANTPULSE // PLATFORM V0.8"
         title="DPN Platform"
-        subtitle="Offline-first identity, synchronization, conflict protection, cloud-media readiness, notifications, and PlantPulse tags."
+        subtitle="Secure identity, signed media upload, live cloud synchronization, conflict recovery, device enrollment, and PlantPulse tags."
       />
 
       <View style={styles.statGrid}>
@@ -1554,24 +1687,102 @@ function PlatformScreen({
             <Text style={styles.infoBody}>
               {platformState.identity.profile?.displayName ?? "No DPN account connected"}
             </Text>
+            <Text style={styles.timelineDate}>{platformState.platformBaseUrl ?? "NO PLATFORM ENDPOINT"}</Text>
           </View>
           <Pill
             label={platformState.identity.status}
-            tone={platformState.identity.status === "AUTHENTICATED" ? "green" : "muted"}
+            tone={authenticated ? "green" : "muted"}
           />
         </View>
-        <Text style={styles.platformSecurityNote}>Access tokens are runtime-only and are not persisted to AsyncStorage. A production build should use platform secure storage for renewable credentials.</Text>
+        <Text style={styles.platformSecurityNote}>
+          Native sessions are encrypted with Expo SecureStore. Bearer tokens are never written to AsyncStorage. Web sessions remain runtime-only.
+        </Text>
+        {authenticated ? (
+          <View style={styles.buttonStack}>
+            <PrimaryButton label={syncing ? "SYNCHRONIZING..." : "SYNC DPN PLATFORM"} onPress={onSync} disabled={syncing || !configured} />
+            <SecondaryButton label="REGISTER PUSH + DEVICE" onPress={onRegisterPush} />
+            <SecondaryButton label="DISCONNECT DPN IDENTITY" onPress={onDisconnect} />
+          </View>
+        ) : null}
       </Card>
 
+      {__DEV__ ? (
+        <Card style={styles.infoCard}>
+          <Text style={styles.infoTitle}>LOCAL DPN PLATFORM CONNECTION // DEVELOPMENT ONLY</Text>
+          <Text style={styles.infoBody}>
+            Connect this development build to the v0.7 local Fastify/PostgreSQL service. Release builds do not expose development identity.
+          </Text>
+          <Text style={styles.fieldLabel}>PLATFORM URL</Text>
+          <TextInput
+            value={endpoint}
+            onChangeText={setEndpoint}
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="http://192.168.x.x:8787"
+            placeholderTextColor="#637268"
+            style={styles.editInput}
+          />
+          <Text style={styles.fieldLabel}>TENANT ID</Text>
+          <TextInput value={tenantId} onChangeText={setTenantId} autoCapitalize="none" style={styles.editInput} />
+          <Text style={styles.fieldLabel}>USER ID</Text>
+          <TextInput value={userId} onChangeText={setUserId} autoCapitalize="none" style={styles.editInput} />
+          <PrimaryButton
+            label="CONNECT DEVELOPMENT PLATFORM"
+            onPress={() => onConnectDevelopment(endpoint, tenantId, userId)}
+          />
+        </Card>
+      ) : null}
+
       <Card style={styles.infoCard}>
-        <Text style={styles.infoTitle}>CLOUD BACKEND STATUS // NOT CONFIGURED</Text>
-        <Text style={styles.infoBody}>The authenticated DPN Platform client, media-upload grants, revision reconciliation, device registration, and tag-claim contracts are implemented. This build does not invent an endpoint or pretend remote synchronization succeeded.</Text>
+        <Text style={styles.infoTitle}>
+          CLOUD BACKEND STATUS // {authenticated && configured ? "CONNECTED" : configured ? "ENDPOINT READY" : "LOCAL ONLY"}
+        </Text>
+        <Text style={styles.infoBody}>
+          v0.8 executes signed image uploads and revisioned plant synchronization against the configured DPN Platform endpoint. Failed work is retained locally with retry metadata.
+        </Text>
         <View style={styles.platformMetricRow}>
           <Text style={styles.platformMetric}>MEDIA PENDING {pendingImages}</Text>
           <Text style={styles.platformMetric}>NOTIFICATIONS {unread.length}</Text>
-          <Text style={styles.platformMetric}>CONFLICTS {platformState.conflicts.length + conflicts}</Text>
+          <Text style={styles.platformMetric}>DEVICE {platformState.device ? "ENROLLED" : "—"}</Text>
         </View>
+        {summary ? (
+          <Text style={styles.timelineDate}>
+            LAST SYNC • PUSH {summary.pushed} • PULL {summary.pulled} • MEDIA {summary.uploadedImages} • TAGS {summary.claimedTags} • FAILED {summary.failed}
+          </Text>
+        ) : null}
+        {platformState.lastSyncError ? <Text style={styles.warningText}>{platformState.lastSyncError}</Text> : null}
+        {platformState.nextRetryAt ? (
+          <Text style={styles.timelineDate}>NEXT RETRY {new Date(platformState.nextRetryAt).toLocaleString()}</Text>
+        ) : null}
       </Card>
+
+      {platformState.conflicts.length > 0 ? (
+        <>
+          <SectionTitle title="CONFLICT RESOLUTION" action={platformState.conflicts.length + " BLOCKED"} />
+          {platformState.conflicts.map((conflict) => {
+            const local = plants.find((plant) => plant.id === conflict.plantId);
+            return (
+              <Card key={conflict.id} style={styles.warningCard}>
+                <Text style={styles.warningTitle}>{local?.nickname ?? conflict.plantId}</Text>
+                <Text style={styles.warningText}>{conflict.detail}</Text>
+                <Text style={styles.timelineDate}>
+                  LOCAL r{conflict.localRevision} • REMOTE r{conflict.remoteRevision}
+                </Text>
+                <View style={styles.recommendationActions}>
+                  <Pressable style={styles.applyButton} onPress={() => onResolveConflict(conflict, "KEEP_LOCAL")}>
+                    <Text style={styles.applyButtonText}>KEEP LOCAL</Text>
+                  </Pressable>
+                  {conflict.remotePlant ? (
+                    <Pressable style={styles.feedbackButton} onPress={() => onResolveConflict(conflict, "USE_REMOTE")}>
+                      <Text style={styles.feedbackButtonText}>USE REMOTE</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              </Card>
+            );
+          })}
+        </>
+      ) : null}
 
       <SectionTitle title="PLANTPULSE TAGS" action="QR READER" />
       {!scanningTag ? (
@@ -1611,7 +1822,9 @@ function PlatformScreen({
           <Card style={styles.platformPlantRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.plantName}>{plant.nickname}</Text>
-              <Text style={styles.plantLatin}>LOCAL r{plant.sync.localRevision} • {plant.sync.remoteRevision !== undefined ? "REMOTE r" + plant.sync.remoteRevision : "REMOTE —"}</Text>
+              <Text style={styles.plantLatin}>
+                LOCAL r{plant.sync.localRevision} • {plant.sync.remoteRevision !== undefined ? "REMOTE r" + plant.sync.remoteRevision : "REMOTE —"}
+              </Text>
             </View>
             <Pill
               label={plant.sync.state}

@@ -28,7 +28,8 @@ function conflictRecord(
   plant: Plant,
   remoteRevision: number,
   detail: string,
-  at: string
+  at: string,
+  remotePlant?: Plant
 ): SyncConflict {
   return {
     id: "conflict-" + plant.id + "-" + at,
@@ -36,7 +37,8 @@ function conflictRecord(
     localRevision: plant.sync.localRevision,
     remoteRevision,
     detectedAt: at,
-    detail
+    detail,
+    ...(remotePlant ? { remotePlant } : {})
   };
 }
 
@@ -92,7 +94,7 @@ export async function synchronizePlants(
     ) {
       const detail = "Both this device and the DPN Platform contain changes. Automatic overwrite was blocked.";
       plants[index] = markPlantConflict(local, remote.remoteRevision, detail);
-      conflicts.push(conflictRecord(local, remote.remoteRevision, detail, at));
+      conflicts.push(conflictRecord(local, remote.remoteRevision, detail, at, remote.plant));
       notifications.push(notification("SYNC", "Plant sync conflict", local.nickname + " needs conflict review.", at, local.id));
       continue;
     }
@@ -119,7 +121,14 @@ export async function synchronizePlants(
       if (error instanceof PlatformConflictError) {
         const detail = "Remote revision changed before this local revision could be committed.";
         plants[index] = markPlantConflict(plant, error.remoteRevision, detail);
-        conflicts.push(conflictRecord(plant, error.remoteRevision, detail, at));
+        let remotePlant: Plant | undefined;
+        try {
+          const latest = await api.pullPlants();
+          remotePlant = latest.find((item) => item.plant.id === plant.id)?.plant;
+        } catch {
+          // The conflict remains valid even if the follow-up snapshot cannot be fetched.
+        }
+        conflicts.push(conflictRecord(plant, error.remoteRevision, detail, at, remotePlant));
         notifications.push(notification("SYNC", "Plant sync conflict", plant.nickname + " changed on another device.", at, plant.id));
       } else {
         const detail = error instanceof Error ? error.message : "Unknown synchronization error";
@@ -141,4 +150,25 @@ export function serializePlantForCloud(plant: Plant): Plant {
       imageUri: scan.cloudImageKey ? "cloud://" + scan.cloudImageKey : ""
     }))
   };
+}
+
+
+export function keepLocalConflictVersion(plant: Plant, conflict: SyncConflict): Plant {
+  if (plant.id !== conflict.plantId) throw new Error("Conflict does not belong to this plant");
+  return {
+    ...plant,
+    sync: {
+      ...plant.sync,
+      state: "DIRTY",
+      remoteRevision: conflict.remoteRevision,
+      lastError: undefined
+    }
+  };
+}
+
+export function acceptRemoteConflictVersion(conflict: SyncConflict, at = new Date().toISOString()): Plant {
+  if (!conflict.remotePlant) {
+    throw new Error("Remote plant snapshot is unavailable; run synchronization again before accepting remote.");
+  }
+  return markPlantSynced(conflict.remotePlant, conflict.remoteRevision, at);
 }

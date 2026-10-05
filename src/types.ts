@@ -258,15 +258,31 @@ export interface SyncConflict {
   remoteRevision: number;
   detectedAt: string;
   detail: string;
+  remotePlant?: Plant;
+}
+
+export interface PlatformSyncSummary {
+  pushed: number;
+  pulled: number;
+  uploadedImages: number;
+  failed: number;
+  conflicts: number;
+  claimedTags: number;
+  completedAt: string;
 }
 
 export interface PlatformState {
   identity: DpnIdentitySession;
+  platformBaseUrl?: string;
   device?: RegisteredClientDevice;
   notifications: PlatformNotification[];
   conflicts: SyncConflict[];
+  claimedTagIds?: string[];
   lastSyncAt?: string;
   lastSyncError?: string;
+  lastSyncSummary?: PlatformSyncSummary;
+  syncAttempt?: number;
+  nextRetryAt?: string;
 }
 
 export interface PlantTag {
