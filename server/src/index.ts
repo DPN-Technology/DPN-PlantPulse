@@ -3,9 +3,13 @@ import { loadConfig } from "./config.js";
 import { createPlatformApp } from "./app.js";
 import { S3ObjectStore } from "./objectStore.js";
 import { PostgresPlatformRepository } from "./postgresRepository.js";
+import { PostgresNotificationOutboxRepository } from "./notificationRepository.js";
+import { ExpoPushProvider } from "./pushProvider.js";
+import { PlantPulsePushWorker } from "./pushWorker.js";
 
 const config = loadConfig();
 const repository = new PostgresPlatformRepository(config.databaseUrl);
+const notificationRepository = new PostgresNotificationOutboxRepository(config.databaseUrl);
 const authVerifier = config.auth.mode === "development"
   ? new DevelopmentAuthVerifier()
   : new JwksAuthVerifier({
@@ -27,11 +31,26 @@ const app = await createPlatformApp({
   repository,
   authVerifier,
   objectStore,
+  notificationRepository,
   logger: true
 });
 
+const pushWorker = config.notifications.enabled
+  ? new PlantPulsePushWorker({
+      repository: notificationRepository,
+      provider: new ExpoPushProvider(),
+      intervalMs: config.notifications.workerIntervalMs,
+      batchSize: config.notifications.batchSize,
+      receiptDelayMs: config.notifications.receiptDelayMs,
+      logger: app.log
+    })
+  : undefined;
+
+pushWorker?.start();
+
 async function shutdown(signal: string) {
   app.log.info({ signal }, "Shutting down PlantPulse platform");
+  pushWorker?.stop();
   await app.close();
   process.exit(0);
 }
