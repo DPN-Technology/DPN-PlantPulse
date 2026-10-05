@@ -19,7 +19,7 @@ function cleanBaseUrl(value: string | undefined): string | undefined {
 export function getPlatformRuntimeConfig(): PlatformRuntimeConfig {
   const scopes = (process.env.EXPO_PUBLIC_DPN_IDENTITY_SCOPES ?? "openid profile email offline_access")
     .split(/\s+/)
-    .map((item) => item.trim())
+    .map((item: string) => item.trim())
     .filter(Boolean);
 
   return {
