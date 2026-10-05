@@ -143,6 +143,7 @@
 - [x] image type / size constraints
 - [x] health + readiness endpoints
 - [x] security response headers
+- [x] authenticated route rate limiting
 - [x] API integration tests
 - [x] PostgreSQL integration tests
 - [x] CI backend build/typecheck/test gates
