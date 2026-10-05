@@ -28,7 +28,11 @@ export function isIdentitySessionUsable(session: DpnIdentitySession): boolean {
 export function expireIdentitySession(session: DpnIdentitySession): DpnIdentitySession {
   return {
     status: "EXPIRED",
+    provider: session.provider,
     profile: session.profile,
-    expiresAt: session.expiresAt
+    refreshToken: session.refreshToken,
+    expiresAt: session.expiresAt,
+    tokenType: session.tokenType,
+    scope: session.scope
   };
 }
