@@ -3,6 +3,7 @@ import test from "node:test";
 import { createPlatformApp } from "../src/app.js";
 import { AuthVerifier } from "../src/auth.js";
 import { InMemoryPlatformRepository } from "../src/memoryRepository.js";
+import { InMemoryNotificationOutboxRepository } from "../src/memoryNotificationRepository.js";
 import { ObjectStore } from "../src/objectStore.js";
 import {
   AuthContext,
@@ -38,11 +39,12 @@ class TestObjectStore implements ObjectStore {
   }
 }
 
-async function app() {
+async function app(notificationRepository?: InMemoryNotificationOutboxRepository) {
   return createPlatformApp({
     repository: new InMemoryPlatformRepository(),
     objectStore: new TestObjectStore(),
-    authVerifier: new HeaderAuthVerifier()
+    authVerifier: new HeaderAuthVerifier(),
+    ...(notificationRepository ? { notificationRepository } : {})
   });
 }
 
@@ -62,7 +64,7 @@ test("health is public and reports service version", async () => {
   assert.deepEqual(response.json(), {
     service: "dpn-plantpulse-platform",
     status: "ok",
-    version: "0.7.0"
+    version: "0.10.0"
   });
   await server.close();
 });
@@ -267,5 +269,44 @@ test("authenticated routes are rate limited", async () => {
   assert.equal(second.statusCode, 200);
   assert.equal(third.statusCode, 429);
   assert.ok(third.headers["retry-after"]);
+  await server.close();
+});
+
+
+test("notification queue is tenant-user scoped and deduplicated by source", async () => {
+  const outbox = new InMemoryNotificationOutboxRepository();
+  outbox.addDevice("tenant-a", "user-a", "phone-1", "ExponentPushToken[test]");
+  outbox.addDevice("tenant-a", "user-b", "phone-2", "ExponentPushToken[other]");
+  const server = await app(outbox);
+  const headers = { authorization: "Bearer tenant-a:user-a" };
+  const payload = {
+    notifications: [{
+      sourceId: "care-water-plant-1",
+      kind: "CARE",
+      title: "Water check due",
+      body: "Plant One has a watering check due.",
+      plantId: "plant-1"
+    }]
+  };
+
+  const first = await server.inject({
+    method: "POST",
+    url: "/v1/notifications/queue",
+    headers,
+    payload
+  });
+  const second = await server.inject({
+    method: "POST",
+    url: "/v1/notifications/queue",
+    headers,
+    payload
+  });
+
+  assert.equal(first.statusCode, 202);
+  assert.equal(first.json().queued, 1);
+  assert.equal(second.statusCode, 202);
+  assert.equal(second.json().queued, 0);
+  assert.equal(outbox.snapshot().length, 1);
+  assert.equal(outbox.snapshot()[0]!.deviceId, "phone-1");
   await server.close();
 });
