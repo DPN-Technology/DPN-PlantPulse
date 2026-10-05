@@ -32,6 +32,10 @@ export interface PlatformConfig {
     forcePathStyle: boolean;
     uploadTtlSeconds: number;
     maxUploadBytes: number;
+    cleanupEnabled: boolean;
+    cleanupIntervalMs: number;
+    cleanupBatchSize: number;
+    orphanGraceMs: number;
   };
 }
 
@@ -94,7 +98,11 @@ export function loadConfig(): PlatformConfig {
       ...(endpoint ? { endpoint } : {}),
       forcePathStyle: process.env.S3_FORCE_PATH_STYLE === "true",
       uploadTtlSeconds: positiveInt("S3_UPLOAD_TTL_SECONDS", 900),
-      maxUploadBytes: positiveInt("MAX_IMAGE_UPLOAD_BYTES", 15 * 1024 * 1024)
+      maxUploadBytes: positiveInt("MAX_IMAGE_UPLOAD_BYTES", 15 * 1024 * 1024),
+      cleanupEnabled: process.env.MEDIA_CLEANUP_ENABLED === "true",
+      cleanupIntervalMs: positiveInt("MEDIA_CLEANUP_INTERVAL_MS", 60_000),
+      cleanupBatchSize: Math.min(100, positiveInt("MEDIA_CLEANUP_BATCH_SIZE", 25)),
+      orphanGraceMs: positiveInt("MEDIA_ORPHAN_GRACE_MS", 24 * 60 * 60_000)
     }
   };
 }
