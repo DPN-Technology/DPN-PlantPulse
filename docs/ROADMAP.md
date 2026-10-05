@@ -257,11 +257,45 @@ See [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md) for the evidence gate.
 - [x] v0.11 mobile operational health panel
 - [x] API tests for notification policy and device trust
 - [x] PostgreSQL tests for category suppression and quiet-hour deferral
-- [ ] production metrics exporter / trace backend
-- [ ] API latency/error histograms
-- [ ] push delivery SLO dashboards
-- [ ] background-sync failure SLO
+- [x] Prometheus-compatible metrics exporter
+- [ ] production trace backend
+- [x] API latency/error histograms
+- [x] push delivery reliability metrics
+- [ ] external push delivery SLO dashboards
+- [x] background-sync reliability reporting + SLO evaluation
 - [ ] administrative device reactivation workflow with stronger proof
+
+## v0.12 — Observability + reliability + DPN Operational Control
+- [x] official Prometheus Node client
+- [x] Node/process runtime metrics
+- [x] bounded-label HTTP request counter
+- [x] HTTP request-duration histogram
+- [x] rolling API p95 calculation
+- [x] server-error ratio
+- [x] request-success SLO evaluation
+- [x] authentication-failure counter
+- [x] revision-conflict counter
+- [x] push lifecycle metrics
+- [x] push worker cycle metrics
+- [x] foreground sync reliability reports
+- [x] background sync reliability reports
+- [x] durable latest operation report per device
+- [x] PostgreSQL operation-report ordering protection
+- [x] detailed dependency readiness
+- [x] x-request-id response correlation
+- [x] /metrics Prometheus scrape surface
+- [x] /control/health non-secret DPN health feed
+- [x] DPN Operational Control Tier B contract
+- [x] CI control-contract validation
+- [x] DPN Platform console sync/background health evidence
+- [x] explicit SLO target definitions
+- [x] observability unit/API/PostgreSQL tests
+- [ ] production Prometheus/Grafana-compatible collector deployment
+- [ ] distributed tracing / OTLP backend
+- [ ] production alert routing
+- [ ] multi-day SLO evidence windows
+- [ ] DPN Operational Control signed Integration Fabric heartbeat
+- [ ] production dashboard retention / burn-rate alerts
 
 ## Product families
 - PlantPulse Home
