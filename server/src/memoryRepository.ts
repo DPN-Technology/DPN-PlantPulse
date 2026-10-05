@@ -334,20 +334,20 @@ export class InMemoryPlatformRepository implements PlatformRepository {
     for (const record of this.mediaUploads.values()) {
       if (record.tenantId !== input.tenantId || record.plantId !== input.plantId) continue;
       if (incoming.has(record.objectKey) && (record.status === "VERIFIED" || record.status === "ATTACHED")) {
+        const { detachedAt: _detachedAt, ...rest } = record;
         this.mediaUploads.set(record.uploadId, {
-          ...record,
+          ...rest,
           status: "ATTACHED",
-          attachedAt: record.attachedAt ?? new Date().toISOString(),
-          detachedAt: undefined
-        } as MediaUploadRecord);
+          attachedAt: record.attachedAt ?? new Date().toISOString()
+        });
       } else if (!incoming.has(record.objectKey) && record.status === "ATTACHED") {
+        const { attachedAt: _attachedAt, ...rest } = record;
         this.mediaUploads.set(record.uploadId, {
-          ...record,
+          ...rest,
           status: "VERIFIED",
-          attachedAt: undefined,
           detachedAt: new Date().toISOString(),
           nextCleanupAt: new Date().toISOString()
-        } as MediaUploadRecord);
+        });
       }
     }
   }
