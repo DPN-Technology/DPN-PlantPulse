@@ -225,16 +225,17 @@ export async function createPlatformApp(options: PlatformAppOptions) {
       const dependencies = await readinessSnapshot();
       const reliability = options.observability!.snapshot();
       const ready = Object.values(dependencies).every(Boolean);
-      const state = !ready
+      const status = !ready || reliability.state === "DEGRADED"
         ? "DEGRADED"
-        : reliability.state;
+        : "ONLINE";
       return reply.send({
         schemaVersion: "1.0",
         productId: "DPN-PLANTPULSE",
         integrationId: "DPN-PLANTPULSE",
         service: "dpn-plantpulse-platform",
         version: "0.12.0",
-        status: state,
+        status,
+        healthState: reliability.state,
         readiness: dependencies,
         reliability,
         generatedAt: new Date().toISOString()
