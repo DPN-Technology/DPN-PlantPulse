@@ -19,6 +19,7 @@ import {
 import { DpnPlatformApiClient } from "./services/platformApi";
 import {
   DpnIdentitySession,
+  NotificationPreferences,
   Plant,
   PlatformState,
   RegisteredClientDevice,
@@ -277,6 +278,45 @@ export async function registerPushAndDevice(
     state: { ...renewedState, device },
     push
   };
+}
+
+export async function refreshPlatformControlPlane(state: PlatformState): Promise<PlatformState> {
+  const renewedState = await renewIdentityForRuntime(state);
+  const api = apiForState(renewedState);
+  const [notificationPreferences, trustedDevices, operationalHealth] = await Promise.all([
+    api.getNotificationPreferences(),
+    api.listDevices(),
+    api.getOperationalHealth()
+  ]);
+  return {
+    ...renewedState,
+    notificationPreferences,
+    trustedDevices,
+    operationalHealth
+  };
+}
+
+export async function savePlatformNotificationPreferences(
+  state: PlatformState,
+  preferences: NotificationPreferences
+): Promise<PlatformState> {
+  const renewedState = await renewIdentityForRuntime(state);
+  const api = apiForState(renewedState);
+  const notificationPreferences = await api.updateNotificationPreferences(preferences);
+  return {
+    ...renewedState,
+    notificationPreferences
+  };
+}
+
+export async function revokeTrustedPlatformDevice(
+  state: PlatformState,
+  deviceId: string
+): Promise<PlatformState> {
+  const renewedState = await renewIdentityForRuntime(state);
+  const api = apiForState(renewedState);
+  await api.revokeDevice(deviceId);
+  return refreshPlatformControlPlane(renewedState);
 }
 
 export function resolvePlatformConflict(
