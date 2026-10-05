@@ -18,7 +18,7 @@
     "validate:dpn-control": "node tools/validate-dpn-control-contract.mjs"
   },
   "dependencies": {
-    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-async-storage/async-storage": "3.1.1",
     "expo": "~57.0.9",
     "expo-camera": "~57.0.6",
     "expo-image-picker": "~57.0.20",
