@@ -37,6 +37,7 @@ export interface ReliabilitySnapshot {
     total: number;
     serverErrors: number;
     serverErrorPercent?: number;
+    requestSuccessPercent?: number;
     p95Milliseconds?: number;
   };
   authenticationFailures: number;
@@ -277,6 +278,9 @@ export class PlantPulseObservability implements PushReliabilityObserver {
       ? sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * 0.95) - 1)]
       : undefined;
     const serverErrorPercent = percent(this.serverErrors, this.requestTotal);
+    const requestSuccessPercent = serverErrorPercent === undefined
+      ? undefined
+      : Math.round((100 - serverErrorPercent) * 100) / 100;
     const pushTerminalSuccessPercent = percent(
       this.pushCounts.delivered,
       this.pushCounts.delivered + this.pushCounts.dead
@@ -287,6 +291,7 @@ export class PlantPulseObservability implements PushReliabilityObserver {
     );
 
     const evaluations: Record<string, ReliabilityState> = {
+      requestSuccess: stateForLowerBound(requestSuccessPercent, this.targets.availabilityPercent),
       apiP95: stateForUpperBound(p95, this.targets.apiP95Milliseconds),
       serverErrorRate: stateForUpperBound(serverErrorPercent, this.targets.serverErrorPercent),
       pushTerminalSuccess: stateForLowerBound(
@@ -315,6 +320,7 @@ export class PlantPulseObservability implements PushReliabilityObserver {
         total: this.requestTotal,
         serverErrors: this.serverErrors,
         ...(serverErrorPercent !== undefined ? { serverErrorPercent } : {}),
+        ...(requestSuccessPercent !== undefined ? { requestSuccessPercent } : {}),
         ...(p95 !== undefined ? { p95Milliseconds: Math.round(p95 * 100) / 100 } : {})
       },
       authenticationFailures: this.authFailureCount,
