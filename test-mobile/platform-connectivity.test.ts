@@ -78,6 +78,7 @@ class MediaApi implements PlatformApiClient {
     throw new Error("unused");
   }
   async claimPlantTag(): Promise<void> {}
+  async queueNotifications(): Promise<number> { return 0; }
 }
 
 test("pending local plant images are uploaded before cloud serialization", async () => {
@@ -133,7 +134,8 @@ test("sync captures remote snapshot and both conflict strategies are explicit", 
     async registerDevice() {
       throw new Error("unused");
     },
-    async claimPlantTag() {}
+    async claimPlantTag() {},
+    async queueNotifications() { return 0; }
   };
 
   const result = await synchronizePlants([local], api);
