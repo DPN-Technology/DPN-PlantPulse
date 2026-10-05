@@ -2069,6 +2069,16 @@ function PlatformScreen({
                   <Text style={styles.platformMetric}>DELIVERED {platformState.operationalHealth.push.delivered}</Text>
                   <Text style={styles.platformMetric}>DEAD {platformState.operationalHealth.push.dead}</Text>
                 </View>
+                <View style={styles.platformMetricRow}>
+                  <Text style={styles.platformMetric}>SYNC {platformState.operationalHealth.operations.lastSyncResult ?? "—"}</Text>
+                  <Text style={styles.platformMetric}>BG {platformState.operationalHealth.operations.lastBackgroundSyncResult ?? "—"}</Text>
+                  <Text style={styles.platformMetric}>FAILED DEVICES {platformState.operationalHealth.operations.failedDevices}</Text>
+                </View>
+                {platformState.operationalHealth.operations.lastBackgroundSyncAt ? (
+                  <Text style={styles.timelineDate}>
+                    LAST BACKGROUND REPORT {new Date(platformState.operationalHealth.operations.lastBackgroundSyncAt).toLocaleString()}
+                  </Text>
+                ) : null}
                 <Text style={styles.timelineDate}>
                   GENERATED {new Date(platformState.operationalHealth.generatedAt).toLocaleString()}
                 </Text>
