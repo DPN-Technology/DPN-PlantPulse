@@ -42,31 +42,6 @@ async function uploadLocalImage(
   return grant.objectKey;
 }
 
-async function syncScan(
-  scan: PlantScan,
-  api: PlatformApiClient,
-  fetcher: FetchLike
-): Promise<{ scan: PlantScan; uploaded: number; failed: number }> {
-  if (scan.cloudImageKey || !scan.imageUri || scan.imageUri.startsWith("cloud://")) {
-    return { scan, uploaded: 0, failed: 0 };
-  }
-
-  try {
-    const cloudImageKey = await uploadLocalImage(scan.imageUri, api, fetcher);
-    return {
-      scan: { ...scan, cloudImageKey, imageSyncState: "UPLOADED" },
-      uploaded: 1,
-      failed: 0
-    };
-  } catch {
-    return {
-      scan: { ...scan, imageSyncState: "ERROR" },
-      uploaded: 0,
-      failed: 1
-    };
-  }
-}
-
 export async function uploadPendingPlantMedia(
   inputPlants: Plant[],
   api: PlatformApiClient,
@@ -75,13 +50,22 @@ export async function uploadPendingPlantMedia(
   let uploadedImages = 0;
   let failedImages = 0;
   const plants: Plant[] = [];
+  const uploadedByUri = new Map<string, string>();
+
+  const uploadOnce = async (uri: string): Promise<string> => {
+    const existing = uploadedByUri.get(uri);
+    if (existing) return existing;
+    const key = await uploadLocalImage(uri, api, fetcher);
+    uploadedByUri.set(uri, key);
+    uploadedImages += 1;
+    return key;
+  };
 
   for (const plant of inputPlants) {
     let cloudImageKey = plant.cloudImageKey;
     if (!cloudImageKey && plant.imageUri && !plant.imageUri.startsWith("cloud://")) {
       try {
-        cloudImageKey = await uploadLocalImage(plant.imageUri, api, fetcher);
-        uploadedImages += 1;
+        cloudImageKey = await uploadOnce(plant.imageUri);
       } catch {
         failedImages += 1;
       }
@@ -89,10 +73,25 @@ export async function uploadPendingPlantMedia(
 
     const scanHistory: PlantScan[] = [];
     for (const scan of plant.scanHistory) {
-      const result = await syncScan(scan, api, fetcher);
-      scanHistory.push(result.scan);
-      uploadedImages += result.uploaded;
-      failedImages += result.failed;
+      if (scan.cloudImageKey || !scan.imageUri || scan.imageUri.startsWith("cloud://")) {
+        scanHistory.push(scan);
+        continue;
+      }
+
+      try {
+        const scanCloudImageKey = await uploadOnce(scan.imageUri);
+        scanHistory.push({
+          ...scan,
+          cloudImageKey: scanCloudImageKey,
+          imageSyncState: "UPLOADED"
+        });
+      } catch {
+        failedImages += 1;
+        scanHistory.push({
+          ...scan,
+          imageSyncState: "ERROR"
+        });
+      }
     }
 
     plants.push({
