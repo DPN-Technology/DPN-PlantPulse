@@ -217,3 +217,53 @@ plantpulse://plant/{plantId}?tag={tagId}
 ```
 
 The QR reader accepts QR codes through Expo Camera, parses only PlantPulse tag payloads, and verifies a local tag ID when the plant already has one assigned.
+
+
+## v0.7 DPN Platform service
+
+v0.7 implements the server side of the v0.6 client contract.
+
+```text
+PlantPulse Mobile
+    |
+    v
+DPN Platform Service (Fastify / Node 22)
+    |
+    +--> Identity verifier
+    |      +-- remote JWKS
+    |      +-- issuer validation
+    |      +-- audience validation
+    |      +-- tenant claim
+    |
+    +--> PostgreSQL repository
+    |      +-- tenant-scoped plants
+    |      +-- optimistic revisions
+    |      +-- devices
+    |      +-- plant tags
+    |      +-- audit events
+    |
+    +--> S3-compatible object store
+           +-- signed PUT grants
+           +-- image type restriction
+           +-- upload-size restriction
+```
+
+### Concurrency invariant
+
+Plant updates are executed in a PostgreSQL transaction and lock the existing plant row before comparing `baseRemoteRevision`. A client with a stale revision receives HTTP 409 and the current remote revision; the service does not silently use last-write-wins.
+
+### Tenant boundary
+
+Every plant and client-device query is scoped by the authenticated tenant claim. Tag ownership is globally unique at the tag ID and tied to a tenant-scoped plant.
+
+### Identity modes
+
+Production mode validates signed JWTs using DPN identity JWKS configuration. A local development verifier exists only for local Docker/testing and throws if development mode is selected while `NODE_ENV=production`.
+
+### Rate limiting
+
+The Fastify service applies request throttling before route handlers execute. The default process-level policy is 120 requests per minute per client key, with standard limit/remaining/reset/retry headers. Production API-gateway limits can add a second distributed enforcement layer.
+
+### Deployment boundary
+
+The service, schema, container, migrations, and local Postgres/MinIO environment are implemented. v0.7 does not claim that production DPN identity, managed PostgreSQL, object storage, DNS, TLS, or an API gateway have already been provisioned.

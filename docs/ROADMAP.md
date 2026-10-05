@@ -19,9 +19,12 @@
 - [x] CI + CodeQL + Dependabot baseline
 
 ## v0.2 — Real data model
-- [ ] Authenticated DPN identity
-- [ ] Cloud plant records
-- [ ] Image upload service
+- [x] Authenticated DPN identity client/server contracts
+- [ ] Production DPN identity provider provisioning
+- [x] Cloud plant record service + PostgreSQL schema
+- [ ] Production cloud database provisioning
+- [x] Signed image upload-grant service
+- [ ] Production object-storage provisioning
 - [x] Plant / scan client service contracts
 - [x] Versioned local plant-record schema + v0.1 migration
 - [x] Persistent scan history per plant
@@ -32,8 +35,9 @@
 - [x] Editable per-plant care intervals
 - [x] Room / location management
 - [x] Plant notes
-- [ ] Notifications
-- [ ] QR plant tags
+- [x] In-app notification model
+- [ ] Production push delivery
+- [x] QR plant tags + server-side claim endpoint
 
 ## v0.3 — Vision intelligence
 - [x] DPN Vision API client adapter + multipart image transport
@@ -113,6 +117,7 @@
 - [x] In-app notification candidate engine
 - [x] v0.5 → v0.6 persistence migration
 - [ ] Production DPN identity provider deployment
+- [x] PlantPulse cloud API service implementation
 - [ ] Production PlantPulse cloud API deployment
 - [ ] Secure credential refresh storage
 - [ ] Actual image/object upload execution
@@ -120,6 +125,39 @@
 - [ ] Push notification delivery
 - [ ] Conflict-resolution editor
 - [ ] Multi-device end-to-end integration tests
+
+## v0.7 — DPN Platform service
+- [x] Node.js / Fastify service runtime
+- [x] PostgreSQL persistence adapter
+- [x] PostgreSQL schema + migration runner
+- [x] JWKS/JWT signature verification
+- [x] issuer / audience / tenant-claim enforcement
+- [x] production-blocked local development identity mode
+- [x] tenant-scoped plant collection endpoint
+- [x] server-side optimistic concurrency
+- [x] HTTP 409 stale-revision responses
+- [x] tenant-scoped device enrollment
+- [x] unique PlantPulse tag claims
+- [x] audit-event persistence
+- [x] S3-compatible signed upload grants
+- [x] image type / size constraints
+- [x] health + readiness endpoints
+- [x] security response headers
+- [x] authenticated route rate limiting
+- [x] API integration tests
+- [x] PostgreSQL integration tests
+- [x] CI backend build/typecheck/test gates
+- [x] container image
+- [x] local PostgreSQL + MinIO compose stack
+- [ ] Production DPN identity provider provisioning
+- [ ] Production PostgreSQL deployment
+- [ ] Production object-storage bucket/KMS policy
+- [ ] Production DNS/TLS/API gateway
+- [ ] Background sync scheduler on mobile
+- [ ] Push notification worker/provider
+- [ ] Server-side media completion callback/verification
+- [ ] Conflict-resolution UI
+- [ ] Production observability/SLO dashboards
 
 ## Product families
 - PlantPulse Home

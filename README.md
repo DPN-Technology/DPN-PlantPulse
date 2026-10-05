@@ -5,9 +5,9 @@
 
 DPN PlantPulse is a mobile-first plant intelligence platform from DPN Technology. The goal is not to create a branded clone of an existing plant identifier. PlantPulse is designed around a DPN-specific idea: every plant becomes a continuously monitored biological asset with an evolving health record.
 
-## v0.6 DPN Platform infrastructure foundation
+## v0.7 DPN Platform service foundation
 
-The repository now contains a runnable Expo / React Native application foundation for iOS, Android, and web.
+The repository now contains the Expo / React Native client plus a runnable DPN Platform backend service.
 
 ### Working in the prototype
 
@@ -69,6 +69,15 @@ The repository now contains a runnable Expo / React Native application foundatio
 - QR tag camera scanner
 - DPN Platform dashboard
 - in-app notification center/candidate engine
+- Fastify / Node 22 DPN Platform service
+- PostgreSQL plant/device/tag/audit persistence
+- server-side optimistic concurrency with stale-write rejection
+- authenticated API rate limiting with HTTP 429 enforcement
+- JWKS JWT identity verification
+- S3-compatible signed image upload grants
+- backend API + PostgreSQL integration tests
+- Docker platform service
+- local PostgreSQL + MinIO compose environment
 - PlantPulse AI rule-based prototype
 - CI validation
 - CodeQL JavaScript/TypeScript scanning
@@ -76,7 +85,7 @@ The repository now contains a runnable Expo / React Native application foundatio
 
 ## Important prototype boundary
 
-The camera workflow, vision contract, adaptive-care engine, sensor telemetry stack, and v0.6 offline-first platform client are real, but **PlantPulse still does not claim that a production DPN cloud backend, DPN identity provider, physical DPN sensor hardware, native BLE implementation, production-trained botanical model, or calibrated agronomic prediction model has been deployed**.
+The mobile client and v0.7 DPN Platform service code are real, including PostgreSQL persistence and S3-compatible upload signing. **PlantPulse still does not claim that the production DPN identity provider, managed database, production object storage, DNS/TLS/API gateway, physical DPN sensor hardware, native BLE implementation, production-trained botanical model, or calibrated agronomic model have been provisioned/deployed.**
 
 The current analysis adapter intentionally generates deterministic local prototype results. This lets us build, test, and refine the complete mobile experience before connecting the DPN Plant Intelligence backend.
 
@@ -105,7 +114,18 @@ npm run ios
 npm run web
 npm run typecheck
 npm run doctor
+npm run server:typecheck
+npm run server:build
+npm run server:test
 ```
+
+Run the local platform stack:
+
+```bash
+docker compose -f docker-compose.platform.yml up --build
+```
+
+The local stack includes PostgreSQL, MinIO-compatible object storage, and the PlantPulse platform service. See [server/README.md](server/README.md) for the development identity format and production configuration.
 
 ## Visual direction
 

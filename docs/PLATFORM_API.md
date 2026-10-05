@@ -1,6 +1,6 @@
 # DPN PlantPulse Platform API
 
-PlantPulse v0.6 defines the authenticated cloud/platform contract while remaining fully usable offline.
+PlantPulse v0.7 now includes a runnable server implementation of this authenticated cloud/platform contract while the mobile application remains offline-first.
 
 ## Identity
 
@@ -160,3 +160,18 @@ Push delivery is not claimed yet. A production notification service can later co
 - request IDs and audit trails
 - rate limiting
 - replay resistance for device/gateway telemetry
+
+
+## v0.7 implementation map
+
+The implementation lives under `server/`:
+
+- `src/app.ts` — Fastify routes and error semantics
+- `src/auth.ts` — JWKS JWT verification and guarded local development identity
+- `src/postgresRepository.ts` — tenant-scoped PostgreSQL persistence and optimistic concurrency
+- `src/objectStore.ts` — S3-compatible signed upload grants
+- `db/schema.sql` — plant/device/tag/media/audit/outbox schema
+- `test/app.test.ts` — API behavior and tenant-isolation tests
+- `test/postgres.test.ts` — real PostgreSQL revision tests
+
+Production provisioning remains separate from implementation. The code does not embed credentials or a hard-coded production endpoint.
