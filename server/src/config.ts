@@ -15,6 +15,12 @@ export interface PlatformConfig {
   port: number;
   databaseUrl: string;
   auth: PlatformAuthConfig;
+  notifications: {
+    enabled: boolean;
+    workerIntervalMs: number;
+    batchSize: number;
+    receiptDelayMs: number;
+  };
   objectStore: {
     region: string;
     bucket: string;
@@ -68,6 +74,12 @@ export function loadConfig(): PlatformConfig {
     port: positiveInt("PORT", 8787),
     databaseUrl: required("DATABASE_URL"),
     auth: authConfig(),
+    notifications: {
+      enabled: process.env.PUSH_WORKER_ENABLED === "true",
+      workerIntervalMs: positiveInt("PUSH_WORKER_INTERVAL_MS", 15000),
+      batchSize: Math.min(100, positiveInt("PUSH_WORKER_BATCH_SIZE", 50)),
+      receiptDelayMs: positiveInt("PUSH_RECEIPT_DELAY_MS", 15 * 60 * 1000)
+    },
     objectStore: {
       region: process.env.S3_REGION?.trim() || "us-east-1",
       bucket: required("S3_BUCKET"),
