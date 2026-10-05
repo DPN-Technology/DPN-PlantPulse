@@ -245,6 +245,35 @@ export interface RegisteredClientDevice {
   registeredAt: string;
   lastSeenAt: string;
   pushToken?: string;
+  revokedAt?: string;
+}
+
+export interface NotificationPreferences {
+  care: boolean;
+  prediction: boolean;
+  sensor: boolean;
+  sync: boolean;
+  security: boolean;
+  quietHoursEnabled: boolean;
+  quietStart: string;
+  quietEnd: string;
+  timeZone: string;
+  updatedAt?: string;
+}
+
+export interface PlatformOperationalHealth {
+  plantCount: number;
+  activeDevices: number;
+  revokedDevices: number;
+  push: {
+    pending: number;
+    retry: number;
+    ticketed: number;
+    delivered: number;
+    dead: number;
+    lastDeliveredAt?: string;
+  };
+  generatedAt: string;
 }
 
 export interface PlatformNotification {
@@ -300,6 +329,9 @@ export interface PlatformState {
   syncAttempt?: number;
   nextRetryAt?: string;
   backgroundSync?: BackgroundSyncState;
+  notificationPreferences?: NotificationPreferences;
+  trustedDevices?: RegisteredClientDevice[];
+  operationalHealth?: PlatformOperationalHealth;
 }
 
 export interface PlantTag {
