@@ -19,7 +19,7 @@
 | Push delivery | Client enrollment + server outbox/Expo ticket-receipt worker implemented | production push credentials, device proof and delivery SLO evidence |
 | Botanical vision | Prototype/provider contract | trained model, calibration, provenance, evaluation |
 | Sensor network | Protocol/telemetry model | native BLE hardware integration and device identity |
-| Observability | Authenticated durable plant/device/outbox health counters implemented | external metrics/traces, dashboards, alerts and validated SLOs |
+| Observability | Prometheus metrics, bounded HTTP histograms, push/sync/auth/conflict metrics, request correlation and SLO engine implemented | production collector/traces, dashboards, alerts and validated multi-day SLO evidence |
 | Disaster recovery | Schema/local tooling | production backup/restore exercise and documented RPO/RTO |
 
 ## v0.9 engineering objectives
@@ -104,16 +104,18 @@ Production infrastructure should provide:
 
 Before PlantPulse is represented as production-operational, define and measure:
 
-- API request latency;
-- API error rate;
-- synchronization success rate;
-- upload success/failure rate;
-- database saturation;
-- push worker health;
-- background sync failure count;
-- authentication failures;
-- revision-conflict rate;
-- service readiness/availability.
+- [x] API request latency histogram + rolling p95;
+- [x] API server-error ratio + request-success window;
+- [x] synchronization success/failure reports;
+- [ ] upload success/failure metric;
+- [ ] database saturation/pool metric;
+- [x] push worker lifecycle/cycle health;
+- [x] background sync success/failure metric;
+- [x] authentication failures;
+- [x] revision-conflict rate counter;
+- [x] service dependency readiness;
+- [ ] production collector/dashboard/alert retention;
+- [ ] multi-day SLO evidence and burn-rate alerting.
 
 ### 7. Multi-device verification
 
