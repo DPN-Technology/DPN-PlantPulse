@@ -1,4 +1,4 @@
-export type Screen = "home" | "scan" | "collection" | "care" | "sensors" | "ai" | "plant" | "result";
+export type Screen = "home" | "scan" | "collection" | "care" | "sensors" | "platform" | "ai" | "plant" | "result";
 
 export type ScanMode =
   | "identify"
