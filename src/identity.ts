@@ -13,6 +13,7 @@ export function createRuntimeIdentitySession(
 
   return {
     status: "AUTHENTICATED",
+    provider: "development",
     profile,
     accessToken,
     expiresAt
