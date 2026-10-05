@@ -186,6 +186,29 @@
 - [ ] server-side media completion verification
 - [ ] production multi-device end-to-end environment
 
+## v0.9 — Production readiness
+- [x] Production-readiness gate documented
+- [ ] DPN One / OIDC production sign-in
+- [ ] PKCE or equivalent native authorization flow
+- [ ] renewable access-token lifecycle
+- [ ] explicit session revocation
+- [ ] native background task synchronization
+- [ ] production push outbox worker/provider
+- [ ] media completion verification
+- [ ] production object lifecycle / deletion path
+- [ ] managed PostgreSQL environment
+- [ ] production object-storage policy / encryption
+- [ ] DNS / TLS / API gateway
+- [ ] secrets management
+- [ ] metrics / traces / dashboards
+- [ ] API and sync SLOs
+- [ ] production backup / restore exercise
+- [ ] multi-device conflict E2E proof
+- [ ] deployment rollback verification
+- [ ] signed mobile development/release builds
+
+See [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md) for the evidence gate.
+
 ## Product families
 - PlantPulse Home
 - PlantPulse Pro

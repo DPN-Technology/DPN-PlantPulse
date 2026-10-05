@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="285" viewBox="0 0 1200 285" role="img" aria-labelledby="title desc">
+  <title id="title">DPN PlantPulse capability mesh</title>
+  <desc id="desc">Four PlantPulse capability modules connected by an emerald and red telemetry bus.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#050706"/>
+      <stop offset=".5" stop-color="#07130c"/>
+      <stop offset="1" stop-color="#070405"/>
+    </linearGradient>
+    <filter id="g"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="1200" height="285" rx="20" fill="url(#bg)"/>
+  <rect x="1" y="1" width="1198" height="283" rx="19" fill="none" stroke="#18462c"/>
+  <text x="48" y="43" fill="#effff3" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="800" letter-spacing="2">PLANTPULSE // BIOLOGICAL INTELLIGENCE MESH</text>
+  <text x="48" y="66" fill="#718a79" font-family="ui-monospace, monospace" font-size="11">01010011 01000011 01000001 01001110 → 01000001 01001110 01000001 01001100 01011001 01011010 01000101 → 01000001 01000011 01010100</text>
+
+  <path d="M126 143 H1075" stroke="#133d25" stroke-width="7" stroke-linecap="round"/>
+  <path d="M126 143 H612" stroke="#39ff88" stroke-width="2" filter="url(#g)"/>
+  <path d="M612 143 H1075" stroke="#ff2638" stroke-width="2" opacity=".8"/>
+
+  <g transform="translate(45 91)">
+    <rect width="252" height="150" rx="16" fill="#07100b" stroke="#246c3f"/>
+    <text x="22" y="30" fill="#39ff88" font-family="ui-monospace, monospace" font-size="11" font-weight="800">01 // VISION</text>
+    <text x="22" y="58" fill="#f2fff5" font-family="Arial, sans-serif" font-size="23" font-weight="900">SCAN + IDENTIFY</text>
+    <text x="22" y="84" fill="#8ea797" font-family="Arial, sans-serif" font-size="12">Camera • species candidates</text>
+    <text x="22" y="103" fill="#8ea797" font-family="Arial, sans-serif" font-size="12">confidence • evidence • findings</text>
+    <circle cx="217" cy="119" r="13" fill="#092012" stroke="#39ff88"/>
+    <circle cx="217" cy="119" r="4" fill="#39ff88"/>
+  </g>
+
+  <g transform="translate(330 91)">
+    <rect width="252" height="150" rx="16" fill="#07100b" stroke="#246c3f"/>
+    <text x="22" y="30" fill="#39ff88" font-family="ui-monospace, monospace" font-size="11" font-weight="800">02 // HEALTH</text>
+    <text x="22" y="58" fill="#f2fff5" font-family="Arial, sans-serif" font-size="23" font-weight="900">PULSE + PREDICT</text>
+    <text x="22" y="84" fill="#8ea797" font-family="Arial, sans-serif" font-size="12">0–100 PlantPulse Score</text>
+    <text x="22" y="103" fill="#8ea797" font-family="Arial, sans-serif" font-size="12">care trends • 7-day advisory</text>
+    <path d="M185 119h13l8-13 9 25 9-18h14" fill="none" stroke="#39ff88" stroke-width="2"/>
+  </g>
+
+  <g transform="translate(615 91)">
+    <rect width="252" height="150" rx="16" fill="#0d090a" stroke="#6f1b24"/>
+    <text x="22" y="30" fill="#ff3447" font-family="ui-monospace, monospace" font-size="11" font-weight="800">03 // PLATFORM</text>
+    <text x="22" y="58" fill="#fff4f5" font-family="Arial, sans-serif" font-size="23" font-weight="900">SYNC + PROTECT</text>
+    <text x="22" y="84" fill="#b89da1" font-family="Arial, sans-serif" font-size="12">SecureStore • revision sync</text>
+    <text x="22" y="103" fill="#b89da1" font-family="Arial, sans-serif" font-size="12">media upload • conflict recovery</text>
+    <rect x="201" y="106" width="28" height="25" rx="5" fill="none" stroke="#ff3447"/>
+    <path d="M208 106v-7a7 7 0 0 1 14 0v7" fill="none" stroke="#ff3447" stroke-width="2"/>
+  </g>
+
+  <g transform="translate(900 91)">
+    <rect width="252" height="150" rx="16" fill="#07100b" stroke="#246c3f"/>
+    <text x="22" y="30" fill="#39ff88" font-family="ui-monospace, monospace" font-size="11" font-weight="800">04 // SENSORS</text>
+    <text x="22" y="58" fill="#f2fff5" font-family="Arial, sans-serif" font-size="23" font-weight="900">MEASURE + ALERT</text>
+    <text x="22" y="84" fill="#8ea797" font-family="Arial, sans-serif" font-size="12">Moisture • temperature • light</text>
+    <text x="22" y="103" fill="#8ea797" font-family="Arial, sans-serif" font-size="12">humidity • EC • pH telemetry</text>
+    <circle cx="216" cy="118" r="15" fill="none" stroke="#39ff88"/>
+    <path d="M216 97v10m-19 11h10m19 0h10m-20 19v-10" stroke="#39ff88" stroke-width="2"/>
+  </g>
+
+  <text x="48" y="267" fill="#597064" font-family="ui-monospace, monospace" font-size="10" letter-spacing="1.4">DPN TECHNOLOGY // DEVELOP WHAT DOESN'T EXIST • PIONEER WHAT COMES NEXT • NAVIGATE THE FUTURE</text>
+</svg>

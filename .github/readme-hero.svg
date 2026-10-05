@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="430" viewBox="0 0 1200 430" role="img" aria-labelledby="title desc">
+  <title id="title">DPN PlantPulse repository command center</title>
+  <desc id="desc">Black, red and emerald DPN PlantPulse hero with binary telemetry, leaf pulse mark and platform status modules.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#020504"/>
+      <stop offset=".5" stop-color="#07100b"/>
+      <stop offset="1" stop-color="#050304"/>
+    </linearGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#38ff88"/>
+      <stop offset="1" stop-color="#0ba34e"/>
+    </linearGradient>
+    <linearGradient id="red" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff1b30"/>
+      <stop offset="1" stop-color="#8d0715"/>
+    </linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#12301e" stroke-width="1" opacity=".35"/>
+    </pattern>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="430" rx="24" fill="url(#bg)"/>
+  <rect x="1" y="1" width="1198" height="428" rx="23" fill="none" stroke="#1d4d2f"/>
+  <rect width="1200" height="430" rx="24" fill="url(#grid)"/>
+
+  <g opacity=".18" fill="#49f486" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">
+    <text x="55" y="34">01000100 01010000 01001110 00100000 01010000 01001100 01000001 01001110 01010100</text>
+    <text x="620" y="60">00110101 00110000 00110001 00110001 00110100 00110101 00110010</text>
+    <text x="760" y="92">01001000 01000101 01000001 01001100 01010100 01001000</text>
+    <text x="870" y="122" fill="#ff2638">01000011 01010010 01001001 01010100 01001001 01000011 01000001 01001100</text>
+    <text x="735" y="152">01010000 01010101 01001100 01010011 01000101</text>
+  </g>
+
+  <g transform="translate(68 78)">
+    <text x="0" y="0" fill="#f4fff8" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" letter-spacing="4">DPN TECHNOLOGY // BIOLOGICAL INTELLIGENCE</text>
+    <rect x="0" y="22" width="105" height="4" rx="2" fill="#ff1b30"/>
+    <rect x="112" y="22" width="190" height="4" rx="2" fill="#38ff88"/>
+
+    <text x="0" y="92" fill="#f8fff9" font-family="Arial, Helvetica, sans-serif" font-size="58" font-weight="900" letter-spacing="-2">DPN PlantPulse</text>
+    <text x="2" y="126" fill="#42f78b" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" font-weight="700" letter-spacing="1">AI PLANT INTELLIGENCE &amp; HEALTH MONITORING</text>
+
+    <text x="2" y="175" fill="#9ab9a4" font-family="Arial, Helvetica, sans-serif" font-size="17">Identify • Diagnose • Track • Predict • Synchronize</text>
+
+    <g transform="translate(0 208)">
+      <rect width="132" height="34" rx="17" fill="#0a1a10" stroke="#2f8f52"/>
+      <circle cx="18" cy="17" r="5" fill="#39ff88" filter="url(#glow)"/>
+      <text x="31" y="22" fill="#d7ffe4" font-family="ui-monospace, monospace" font-size="12" font-weight="700">MOBILE ACTIVE</text>
+
+      <rect x="144" width="145" height="34" rx="17" fill="#0a1a10" stroke="#2f8f52"/>
+      <circle cx="162" cy="17" r="5" fill="#39ff88"/>
+      <text x="175" y="22" fill="#d7ffe4" font-family="ui-monospace, monospace" font-size="12" font-weight="700">PLATFORM API</text>
+
+      <rect x="301" width="135" height="34" rx="17" fill="#0a1a10" stroke="#2f8f52"/>
+      <circle cx="319" cy="17" r="5" fill="#39ff88"/>
+      <text x="332" y="22" fill="#d7ffe4" font-family="ui-monospace, monospace" font-size="12" font-weight="700">POSTGRESQL</text>
+
+      <rect x="448" width="152" height="34" rx="17" fill="#18090b" stroke="#8f1f2a"/>
+      <circle cx="466" cy="17" r="5" fill="#ff2638"/>
+      <text x="479" y="22" fill="#ffd9dd" font-family="ui-monospace, monospace" font-size="12" font-weight="700">DPN SECURITY</text>
+    </g>
+
+    <text x="0" y="300" fill="#71877a" font-family="ui-monospace, monospace" font-size="12" letter-spacing="2">DEVELOP. PIONEER. NAVIGATE.</text>
+  </g>
+
+  <g transform="translate(790 90)">
+    <circle cx="155" cy="125" r="122" fill="#06110b" stroke="#1c6c3d" stroke-width="2"/>
+    <circle cx="155" cy="125" r="96" fill="none" stroke="#163b26" stroke-width="1" stroke-dasharray="6 7"/>
+    <circle cx="155" cy="125" r="72" fill="none" stroke="#2b7a48" stroke-width="1" opacity=".7"/>
+
+    <path d="M148 190 C104 169 86 132 104 95 C123 56 169 42 210 50 C211 95 203 135 179 162 C167 176 157 185 148 190Z"
+          fill="#0d2a18" stroke="#3dff8d" stroke-width="3" filter="url(#glow)"/>
+    <path d="M149 187 C151 151 158 116 184 74" fill="none" stroke="#7bffad" stroke-width="3"/>
+    <path d="M154 151 C137 136 123 123 111 106M158 132 C175 118 190 104 202 89M151 169 C167 157 181 145 191 132"
+          fill="none" stroke="#2ecf6d" stroke-width="2"/>
+
+    <path d="M32 125 H82 L95 104 L111 154 L131 83 L151 145 L169 116 H278"
+          fill="none" stroke="#ff2638" stroke-width="4" stroke-linejoin="round" filter="url(#glow)"/>
+
+    <path d="M259 4 L228 66 L251 61 L226 118 L282 42 L257 48 Z"
+          fill="#ff1d35" opacity=".9" filter="url(#glow)"/>
+
+    <text x="155" y="276" text-anchor="middle" fill="#39ff88" font-family="ui-monospace, monospace" font-size="14" font-weight="800" letter-spacing="2">PLANTPULSE SCORE // LIVE MODEL</text>
+    <text x="155" y="300" text-anchor="middle" fill="#8cae98" font-family="ui-monospace, monospace" font-size="11">VISION • CARE • SENSORS • CLOUD</text>
+  </g>
+
+  <g transform="translate(870 383)" font-family="ui-monospace, monospace" font-size="10">
+    <text fill="#42f78b">v0.8.0</text>
+    <text x="58" fill="#566b5e">|</text>
+    <text x="76" fill="#b9c9be">OFFLINE-FIRST</text>
+    <text x="174" fill="#566b5e">|</text>
+    <text x="192" fill="#ff4958">DPN CORE</text>
+  </g>
+</svg>
