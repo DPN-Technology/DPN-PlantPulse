@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import {
   DeleteObjectCommand,
   HeadObjectCommand,
@@ -106,9 +105,7 @@ export class S3ObjectStore implements ObjectStore {
       objectKey,
       uploadUrl,
       expiresAt,
-      headers: {
-        "Content-Type": input.contentType
-      }
+      headers: { "Content-Type": input.contentType }
     };
   }
 
