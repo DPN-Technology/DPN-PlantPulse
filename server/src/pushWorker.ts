@@ -64,7 +64,7 @@ export class PlantPulsePushWorker {
   private readonly receiptDelayMs: number;
   private readonly maxAttempts: number;
   private readonly logger: Pick<Console, "info" | "warn" | "error">;
-  private timer?: ReturnType<typeof setInterval>;
+  private timer: ReturnType<typeof setInterval> | undefined;
   private running = false;
 
   constructor(options: PushWorkerOptions) {
