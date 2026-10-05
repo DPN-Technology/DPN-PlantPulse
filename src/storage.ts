@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { addDaysIso } from "./care";
+import { createLocalSyncMetadata } from "./syncState";
 import {
   ConfidenceBand,
   IdentificationStatus,
@@ -7,6 +8,7 @@ import {
   PlantScan
 } from "./types";
 
+const PLANTS_V6_KEY = "@dpn_plantpulse/plants/v6";
 const PLANTS_V5_KEY = "@dpn_plantpulse/plants/v5";
 const PLANTS_V4_KEY = "@dpn_plantpulse/plants/v4";
 const PLANTS_V3_KEY = "@dpn_plantpulse/plants/v3";
@@ -87,7 +89,9 @@ function normalizeScan(raw: LegacyScan): PlantScan {
     toxicity: raw.toxicity,
     engine: raw.engine ?? "local-prototype",
     modelVersion: raw.modelVersion ?? "legacy-pre-v0.3",
-    prototype: raw.prototype ?? true
+    prototype: raw.prototype ?? true,
+    cloudImageKey: raw.cloudImageKey,
+    imageSyncState: raw.imageSyncState ?? (raw.cloudImageKey ? "UPLOADED" : "LOCAL_ONLY")
   };
 }
 
@@ -123,7 +127,10 @@ function normalizePlant(raw: LegacyPlant): Plant {
     recommendationFeedback: Array.isArray(raw.recommendationFeedback) ? raw.recommendationFeedback : [],
     sensorDevices: Array.isArray(raw.sensorDevices) ? raw.sensorDevices : [],
     sensorReadings: Array.isArray(raw.sensorReadings) ? raw.sensorReadings : [],
-    sensorAlerts: Array.isArray(raw.sensorAlerts) ? raw.sensorAlerts : []
+    sensorAlerts: Array.isArray(raw.sensorAlerts) ? raw.sensorAlerts : [],
+    sync: raw.sync ?? createLocalSyncMetadata(raw.lastScanAt ?? now.toISOString()),
+    plantTag: raw.plantTag,
+    cloudImageKey: raw.cloudImageKey
   };
 }
 
@@ -135,6 +142,8 @@ function normalizeCollection(input: unknown, fallback: Plant[]): Plant[] {
 }
 
 async function loadFirstAvailable(): Promise<string | null> {
+  const v6 = await AsyncStorage.getItem(PLANTS_V6_KEY);
+  if (v6) return v6;
   const v5 = await AsyncStorage.getItem(PLANTS_V5_KEY);
   if (v5) return v5;
   const v4 = await AsyncStorage.getItem(PLANTS_V4_KEY);
@@ -160,5 +169,5 @@ export async function loadPlants(fallback: Plant[]): Promise<Plant[]> {
 }
 
 export async function savePlants(plants: Plant[]): Promise<void> {
-  await AsyncStorage.setItem(PLANTS_V5_KEY, JSON.stringify(plants));
+  await AsyncStorage.setItem(PLANTS_V6_KEY, JSON.stringify(plants));
 }

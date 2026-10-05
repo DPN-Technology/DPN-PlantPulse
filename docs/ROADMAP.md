@@ -93,6 +93,34 @@
 - [ ] Background telemetry sync
 - [ ] Signed hardware identity / device attestation
 
+## v0.6 — DPN Platform infrastructure
+- [x] DPN identity/session client model
+- [x] Runtime-only access-token boundary
+- [x] AsyncStorage token redaction
+- [x] Authenticated DPN Platform API client contract
+- [x] Offline-first sync metadata per plant
+- [x] Local / remote revision tracking
+- [x] Pull-before-push synchronization
+- [x] Conflict detection and destructive-overwrite blocking
+- [x] Sync error state
+- [x] Cloud-media upload grant contract
+- [x] Local image URI stripping from cloud payloads
+- [x] Device registration contract
+- [x] Plant-tag claim contract
+- [x] PlantPulse deep-link / QR tag payloads
+- [x] QR tag camera scanner
+- [x] DPN Platform dashboard
+- [x] In-app notification candidate engine
+- [x] v0.5 → v0.6 persistence migration
+- [ ] Production DPN identity provider deployment
+- [ ] Production PlantPulse cloud API deployment
+- [ ] Secure credential refresh storage
+- [ ] Actual image/object upload execution
+- [ ] Background synchronization
+- [ ] Push notification delivery
+- [ ] Conflict-resolution editor
+- [ ] Multi-device end-to-end integration tests
+
 ## Product families
 - PlantPulse Home
 - PlantPulse Pro

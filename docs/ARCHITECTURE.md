@@ -164,3 +164,56 @@ Telemetry Ingestion
 Measured telemetry is kept distinct from image inference. A sensor reading always carries `measured: true`, a unit, observation timestamp, receive timestamp, source device, and quality state. The prediction engine may use valid measured context as additional evidence, but v0.5 does not claim a calibrated agronomic forecast.
 
 Direct BLE is intentionally an interface rather than a fake implementation. The current Expo Go workflow does not include a native BLE module; a development build/native adapter is required before BLE can be marked operational.
+
+
+## v0.6 DPN Platform infrastructure
+
+```text
+PlantPulse Mobile
+    |
+    +--> Local Plant Record
+    |      +-- localRevision
+    |      +-- remoteRevision
+    |      +-- sync state
+    |      +-- updatedAt / lastSyncedAt
+    |
+    +--> DPN Identity Session
+    |      +-- runtime access token
+    |      +-- profile / expiry metadata
+    |      +-- token NOT persisted to AsyncStorage
+    |
+    +--> DPN Platform API Client
+           |
+           +-- GET /v1/plants
+           +-- PUT /v1/plants/{id}
+           +-- POST /v1/media/uploads
+           +-- POST /v1/devices
+           +-- POST /v1/plant-tags/claim
+
+Synchronization
+    |
+    +--> pull remote revisions first
+    +--> detect divergent dirty records
+    +--> block destructive overwrite
+    +--> push eligible local changes
+    +--> mark synced revision
+    +--> surface conflicts / errors
+```
+
+PlantPulse remains offline-first. Local changes work without a server and increment a local revision. The cloud client is an implemented contract, not a claim that the production endpoint is already deployed.
+
+Local `file://` image paths are never serialized as if they were valid cloud media. Cloud serialization only emits a cloud image reference when an uploaded object key actually exists.
+
+### Identity security boundary
+
+The current prototype intentionally does not persist access tokens in AsyncStorage. Profile metadata may persist, but authentication returns to DISCONNECTED after process restart unless a future production secure credential store restores a renewable session.
+
+### PlantPulse tags
+
+Tags use the deep-link form:
+
+```text
+plantpulse://plant/{plantId}?tag={tagId}
+```
+
+The QR reader accepts QR codes through Expo Camera, parses only PlantPulse tag payloads, and verifies a local tag ID when the plant already has one assigned.

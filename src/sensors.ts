@@ -1,3 +1,4 @@
+import { touchPlant } from "./syncState";
 import {
   Plant,
   SensorAlert,
@@ -127,7 +128,7 @@ export function ingestGatewayEnvelope(plant: Plant, envelope: GatewayTelemetryEn
   }));
 
   const alerts = detectSensorAlerts(readings, device);
-  return {
+  return touchPlant({
     ...plant,
     sensorDevices: [
       device,
@@ -135,7 +136,7 @@ export function ingestGatewayEnvelope(plant: Plant, envelope: GatewayTelemetryEn
     ],
     sensorReadings: [...readings, ...plant.sensorReadings].slice(0, 2000),
     sensorAlerts: [...alerts, ...plant.sensorAlerts].slice(0, 250)
-  };
+  }, receivedAt);
 }
 
 export function sensorStatus(device: SensorDevice, now = new Date()): SensorStatus {
@@ -211,12 +212,12 @@ export function detectSensorAlerts(readings: SensorReading[], device: SensorDevi
 
 export function acknowledgeSensorAlert(plant: Plant, alertId: string): Plant {
   const at = new Date().toISOString();
-  return {
+  return touchPlant({
     ...plant,
     sensorAlerts: plant.sensorAlerts.map((alert) =>
       alert.id === alertId ? { ...alert, acknowledgedAt: at } : alert
     )
-  };
+  }, at);
 }
 
 export function latestMeasuredReading(plant: Plant, metric: SensorMetric): SensorReading | undefined {

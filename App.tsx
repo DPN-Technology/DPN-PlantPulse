@@ -24,10 +24,14 @@ import {
   applyCareRecommendation,
   attachScanToPlant,
   completeCareAction,
+  assignPlantTag,
   createPlantFromScan,
   recordRecommendationFeedback,
   updatePlantProfile
 } from "./src/plantService";
+import { buildLocalNotifications, mergeNotifications } from "./src/notificationEngine";
+import { createPlantTag, parsePlantTagPayload } from "./src/plantTags";
+import { defaultPlatformState, loadPlatformState, savePlatformState } from "./src/platformStorage";
 import { plantIntelligenceClient } from "./src/services/plantIntelligence";
 import { getSpeciesCareBaseline } from "./src/speciesCare";
 import {
@@ -42,6 +46,7 @@ import {
   CareRecommendation,
   Plant,
   PlantProfileUpdate,
+  PlatformState,
   RecommendationFeedbackValue,
   SensorMetric,
   SensorReading,
@@ -95,6 +100,8 @@ export default function App() {
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [platformLoaded, setPlatformLoaded] = useState(false);
+  const [platformState, setPlatformState] = useState<PlatformState>(defaultPlatformState);
 
   useEffect(() => {
     loadPlants(seedPlants).then((stored) => {
@@ -107,6 +114,27 @@ export default function App() {
     if (!loaded) return;
     savePlants(plants).catch(() => undefined);
   }, [plants, loaded]);
+
+  useEffect(() => {
+    loadPlatformState().then((stored) => {
+      setPlatformState(stored);
+      setPlatformLoaded(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!platformLoaded) return;
+    savePlatformState(platformState).catch(() => undefined);
+  }, [platformState, platformLoaded]);
+
+  useEffect(() => {
+    if (!platformLoaded) return;
+    const generated = buildLocalNotifications(plants);
+    setPlatformState((current) => ({
+      ...current,
+      notifications: mergeNotifications(current.notifications, generated)
+    }));
+  }, [plants, platformLoaded]);
 
   const selectedPlant = plants.find((plant) => plant.id === selectedPlantId) ?? null;
 
@@ -194,6 +222,20 @@ export default function App() {
     updatePlantRecord(plantId, (plant) => acknowledgeSensorAlert(plant, alertId));
   };
 
+  const generatePlantTag = (plantId: string) => {
+    updatePlantRecord(plantId, (plant) => assignPlantTag(plant, createPlantTag(plant.id)));
+  };
+
+  const markNotificationRead = (notificationId: string) => {
+    const at = new Date().toISOString();
+    setPlatformState((current) => ({
+      ...current,
+      notifications: current.notifications.map((item) =>
+        item.id === notificationId ? { ...item, readAt: at } : item
+      )
+    }));
+  };
+
   const averageScore = Math.round(plants.reduce((sum, plant) => sum + plant.healthScore, 0) / Math.max(1, plants.length));
   const attention = plants.filter((plant) => plant.healthScore < 75);
   const dueCare = plants.filter((plant) => daysUntil(plant.nextWaterAt) <= 1 || daysUntil(plant.nextFeedAt) <= 1);
@@ -242,6 +284,7 @@ export default function App() {
           onRecommendationFeedback={feedbackRecommendation}
           onApplyRecommendation={applyRecommendation}
           onAcknowledgeSensorAlert={acknowledgeAlert}
+          onGeneratePlantTag={generatePlantTag}
         />
       );
     }
@@ -261,6 +304,17 @@ export default function App() {
       return <SensorNetworkScreen plants={plants} onAcknowledge={acknowledgeAlert} />;
     }
 
+    if (screen === "platform") {
+      return (
+        <PlatformScreen
+          plants={plants}
+          platformState={platformState}
+          onOpenPlant={openPlant}
+          onReadNotification={markNotificationRead}
+        />
+      );
+    }
+
     if (screen === "ai") {
       return <AiScreen plants={plants} />;
     }
@@ -274,6 +328,7 @@ export default function App() {
         onScan={() => setScreen("scan")}
         onOpen={openPlant}
         onViewPlants={() => setScreen("collection")}
+        onPlatform={() => setScreen("platform")}
       />
     );
   };
@@ -297,7 +352,8 @@ function HomeScreen({
   dueCare,
   onScan,
   onOpen,
-  onViewPlants
+  onViewPlants,
+  onPlatform
 }: {
   plants: Plant[];
   averageScore: number;
@@ -306,6 +362,7 @@ function HomeScreen({
   onScan: () => void;
   onOpen: (id: string) => void;
   onViewPlants: () => void;
+  onPlatform: () => void;
 }) {
   const predictiveWatch = plants
     .map((plant) => ({ plant, intelligence: buildCareIntelligence(plant) }))
@@ -402,13 +459,23 @@ function HomeScreen({
         </Pressable>
       ))}
 
+      <Pressable onPress={onPlatform}>
+        <Card style={styles.platformHeroCard}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.infoTitle}>DPN PLATFORM // OFFLINE-FIRST</Text>
+            <Text style={styles.infoBody}>Identity, revisioned cloud sync, conflict protection, PlantPulse tags, notifications, and multi-device infrastructure.</Text>
+          </View>
+          <Text style={styles.platformHeroArrow}>→</Text>
+        </Card>
+      </Pressable>
+
       <SectionTitle title="DPN INTELLIGENCE MODULES" />
       <View style={styles.moduleGrid}>
         {[
           ["VISION", "Species + symptom analysis"],
           ["CARE", "Adaptive recommendation engine"],
           ["PREDICT", "7-day health trend forecasting"],
-          ["SENSORS", "Future moisture + light telemetry"]
+          ["SENSORS", "Measured environmental telemetry"]
         ].map(([name, description]) => (
           <Card key={name} style={styles.moduleCard}>
             <Text style={styles.moduleName}>{name}</Text>
@@ -417,7 +484,7 @@ function HomeScreen({
         ))}
       </View>
 
-      <Text style={styles.prototypeNote}>v0.4 predictions are explainable advisory estimates derived from saved scans and care events. They are not sensor measurements and never auto-change care schedules.</Text>
+      <Text style={styles.prototypeNote}>v0.6 remains offline-first. Cloud identity, storage, and synchronization are real client contracts, but no production DPN Platform endpoint is falsely represented as deployed.</Text>
     </ScrollView>
   );
 }
@@ -860,7 +927,8 @@ function PlantScreen({
   onUpdate,
   onRecommendationFeedback,
   onApplyRecommendation,
-  onAcknowledgeSensorAlert
+  onAcknowledgeSensorAlert,
+  onGeneratePlantTag
 }: {
   plant: Plant;
   onBack: () => void;
@@ -869,6 +937,7 @@ function PlantScreen({
   onRecommendationFeedback: (plantId: string, recommendationId: string, value: RecommendationFeedbackValue) => void;
   onApplyRecommendation: (plantId: string, recommendation: CareRecommendation) => void;
   onAcknowledgeSensorAlert: (plantId: string, alertId: string) => void;
+  onGeneratePlantTag: (plantId: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [nickname, setNickname] = useState(plant.nickname);
@@ -1033,6 +1102,32 @@ function PlantScreen({
           <PrimaryButton label="SAVE PLANT PROFILE" onPress={saveProfile} />
         </Card>
       ) : null}
+
+      <SectionTitle title="DPN PLATFORM RECORD" action={plant.sync.state} />
+      <Card style={styles.platformRecordCard}>
+        <View style={styles.syncRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.infoTitle}>REVISION {plant.sync.localRevision}</Text>
+            <Text style={styles.timelineDate}>
+              {plant.sync.remoteRevision !== undefined ? "REMOTE " + plant.sync.remoteRevision : "NO REMOTE REVISION"} • UPDATED {new Date(plant.sync.updatedAt).toLocaleString()}
+            </Text>
+          </View>
+          <Pill
+            label={plant.sync.state}
+            tone={plant.sync.state === "SYNCED" ? "green" : plant.sync.state === "CONFLICT" || plant.sync.state === "ERROR" ? "red" : "amber"}
+          />
+        </View>
+        {plant.sync.lastError ? <Text style={styles.warningText}>{plant.sync.lastError}</Text> : null}
+        {plant.plantTag ? (
+          <View style={styles.tagPayloadCard}>
+            <Text style={styles.fieldLabel}>PLANTPULSE TAG</Text>
+            <Text style={styles.tagPayloadText}>{plant.plantTag.tagId}</Text>
+            <Text style={styles.tagPayloadUri}>{plant.plantTag.payload}</Text>
+          </View>
+        ) : (
+          <SecondaryButton label="GENERATE PLANT TAG" onPress={() => onGeneratePlantTag(plant.id)} />
+        )}
+      </Card>
 
       <SectionTitle title="SENSOR TELEMETRY" action={plant.sensorDevices.length + " DEVICES"} />
       <Card style={styles.sensorPanel}>
@@ -1375,6 +1470,173 @@ function SensorNetworkScreen({
   );
 }
 
+function PlatformScreen({
+  plants,
+  platformState,
+  onOpenPlant,
+  onReadNotification
+}: {
+  plants: Plant[];
+  platformState: PlatformState;
+  onOpenPlant: (plantId: string) => void;
+  onReadNotification: (notificationId: string) => void;
+}) {
+  const [permission, requestPermission] = useCameraPermissions();
+  const [scanningTag, setScanningTag] = useState(false);
+  const [scanLocked, setScanLocked] = useState(false);
+
+  const synced = plants.filter((plant) => plant.sync.state === "SYNCED").length;
+  const pending = plants.filter((plant) => ["LOCAL_ONLY", "DIRTY", "ERROR"].includes(plant.sync.state)).length;
+  const conflicts = plants.filter((plant) => plant.sync.state === "CONFLICT").length;
+  const pendingImages = plants.reduce(
+    (sum, plant) =>
+      sum +
+      plant.scanHistory.filter((scan) => (scan.imageSyncState ?? "LOCAL_ONLY") !== "UPLOADED").length +
+      (plant.imageUri && !plant.cloudImageKey ? 1 : 0),
+    0
+  );
+  const unread = platformState.notifications.filter((item) => !item.readAt);
+
+  const handleTagScan = ({ data }: { data: string }) => {
+    if (scanLocked) return;
+    const tag = parsePlantTagPayload(data);
+    if (!tag) return;
+
+    setScanLocked(true);
+    const plant = plants.find((item) => item.id === tag.plantId);
+    if (!plant) {
+      Alert.alert("Plant not found", "This PlantPulse tag is valid, but its plant is not present on this device.");
+      setTimeout(() => setScanLocked(false), 1200);
+      return;
+    }
+
+    if (plant.plantTag && plant.plantTag.tagId !== tag.tagId) {
+      Alert.alert("Tag mismatch", "The tag ID does not match the current local tag assigned to this plant.");
+      setTimeout(() => setScanLocked(false), 1200);
+      return;
+    }
+
+    setScanningTag(false);
+    setScanLocked(false);
+    onOpenPlant(plant.id);
+  };
+
+  return (
+    <ScrollView contentContainerStyle={styles.scroll}>
+      <DpnHeader
+        eyebrow="DPN PLANTPULSE // PLATFORM V0.6"
+        title="DPN Platform"
+        subtitle="Offline-first identity, synchronization, conflict protection, cloud-media readiness, notifications, and PlantPulse tags."
+      />
+
+      <View style={styles.statGrid}>
+        <Card style={styles.statCard}>
+          <Text style={styles.statLabel}>SYNCED</Text>
+          <Text style={styles.statValue}>{synced}</Text>
+          <Text style={styles.statMeta}>PLANTS</Text>
+        </Card>
+        <Card style={styles.statCard}>
+          <Text style={styles.statLabel}>PENDING</Text>
+          <Text style={[styles.statValue, pending > 0 && { color: colors.amber }]}>{pending}</Text>
+          <Text style={styles.statMeta}>LOCAL CHANGES</Text>
+        </Card>
+        <Card style={styles.statCard}>
+          <Text style={styles.statLabel}>CONFLICTS</Text>
+          <Text style={[styles.statValue, conflicts > 0 && { color: colors.red }]}>{conflicts}</Text>
+          <Text style={styles.statMeta}>BLOCKED</Text>
+        </Card>
+      </View>
+
+      <Card style={styles.platformIdentityCard}>
+        <View style={styles.syncRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.infoTitle}>DPN IDENTITY</Text>
+            <Text style={styles.infoBody}>
+              {platformState.identity.profile?.displayName ?? "No DPN account connected"}
+            </Text>
+          </View>
+          <Pill
+            label={platformState.identity.status}
+            tone={platformState.identity.status === "AUTHENTICATED" ? "green" : "muted"}
+          />
+        </View>
+        <Text style={styles.platformSecurityNote}>Access tokens are runtime-only and are not persisted to AsyncStorage. A production build should use platform secure storage for renewable credentials.</Text>
+      </Card>
+
+      <Card style={styles.infoCard}>
+        <Text style={styles.infoTitle}>CLOUD BACKEND STATUS // NOT CONFIGURED</Text>
+        <Text style={styles.infoBody}>The authenticated DPN Platform client, media-upload grants, revision reconciliation, device registration, and tag-claim contracts are implemented. This build does not invent an endpoint or pretend remote synchronization succeeded.</Text>
+        <View style={styles.platformMetricRow}>
+          <Text style={styles.platformMetric}>MEDIA PENDING {pendingImages}</Text>
+          <Text style={styles.platformMetric}>NOTIFICATIONS {unread.length}</Text>
+          <Text style={styles.platformMetric}>CONFLICTS {platformState.conflicts.length + conflicts}</Text>
+        </View>
+      </Card>
+
+      <SectionTitle title="PLANTPULSE TAGS" action="QR READER" />
+      {!scanningTag ? (
+        <PrimaryButton
+          label="SCAN PLANTPULSE TAG"
+          onPress={() => {
+            setScanLocked(false);
+            setScanningTag(true);
+          }}
+        />
+      ) : !permission ? (
+        <Card><ActivityIndicator color={colors.green} /></Card>
+      ) : !permission.granted ? (
+        <Card style={styles.infoCard}>
+          <Text style={styles.infoTitle}>CAMERA ACCESS REQUIRED</Text>
+          <Text style={styles.infoBody}>Camera access is required only while scanning a PlantPulse QR tag.</Text>
+          <PrimaryButton label="GRANT CAMERA ACCESS" onPress={requestPermission} />
+        </Card>
+      ) : (
+        <View style={styles.tagScannerShell}>
+          <CameraView
+            style={styles.camera}
+            facing="back"
+            barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+            onBarcodeScanned={handleTagScan}
+          />
+          <View pointerEvents="none" style={styles.tagScannerOverlay}>
+            <Text style={styles.reticleLabel}>SCAN PLANTPULSE QR TAG</Text>
+          </View>
+          <SecondaryButton label="CANCEL TAG SCAN" onPress={() => setScanningTag(false)} />
+        </View>
+      )}
+
+      <SectionTitle title="SYNC STATE" action={plants.length + " RECORDS"} />
+      {plants.map((plant) => (
+        <Pressable key={plant.id} onPress={() => onOpenPlant(plant.id)}>
+          <Card style={styles.platformPlantRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.plantName}>{plant.nickname}</Text>
+              <Text style={styles.plantLatin}>LOCAL r{plant.sync.localRevision} • {plant.sync.remoteRevision !== undefined ? "REMOTE r" + plant.sync.remoteRevision : "REMOTE —"}</Text>
+            </View>
+            <Pill
+              label={plant.sync.state}
+              tone={plant.sync.state === "SYNCED" ? "green" : plant.sync.state === "CONFLICT" || plant.sync.state === "ERROR" ? "red" : "amber"}
+            />
+          </Card>
+        </Pressable>
+      ))}
+
+      <SectionTitle title="NOTIFICATION CENTER" action={unread.length + " UNREAD"} />
+      {platformState.notifications.length === 0 ? (
+        <Card><Text style={styles.emptyText}>No local notification candidates are active.</Text></Card>
+      ) : platformState.notifications.map((item) => (
+        <Pressable key={item.id} onPress={() => onReadNotification(item.id)}>
+          <Card style={[styles.platformNotificationCard, item.readAt && styles.platformNotificationRead]}>
+            <Text style={styles.recommendationMeta}>{item.kind} // {item.readAt ? "READ" : "UNREAD"}</Text>
+            <Text style={styles.recommendationTitle}>{item.title}</Text>
+            <Text style={styles.recommendationDetail}>{item.body}</Text>
+          </Card>
+        </Pressable>
+      ))}
+    </ScrollView>
+  );
+}
+
 function AiScreen({ plants }: { plants: Plant[] }) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Array<{ role: "user" | "ai"; text: string }>>([
@@ -1647,5 +1909,21 @@ const styles = StyleSheet.create({
   telemetryHistoryTitle: { color: colors.text, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
   telemetryHistoryRange: { color: colors.green, fontSize: 9, fontWeight: "900" },
   telemetryBars: { minHeight: 64, flexDirection: "row", alignItems: "flex-end", gap: 3 },
-  telemetryBar: { flex: 1, minWidth: 3, maxWidth: 12, borderRadius: 3, backgroundColor: colors.green }
+  telemetryBar: { flex: 1, minWidth: 3, maxWidth: 12, borderRadius: 3, backgroundColor: colors.green },
+  platformHeroCard: { flexDirection: "row", alignItems: "center", gap: 12, borderColor: "#4E1C24", backgroundColor: "#12090B" },
+  platformHeroArrow: { color: colors.red, fontSize: 30, fontWeight: "900" },
+  platformRecordCard: { gap: 10, borderColor: "#3C2930" },
+  syncRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  tagPayloadCard: { gap: 5, padding: 10, borderRadius: radius.md, backgroundColor: "#070A08", borderWidth: 1, borderColor: colors.border },
+  tagPayloadText: { color: colors.green, fontSize: 13, fontWeight: "900" },
+  tagPayloadUri: { color: colors.muted, fontSize: 8, lineHeight: 13 },
+  platformIdentityCard: { gap: 9, borderColor: "#3C2930" },
+  platformSecurityNote: { color: "#7B7778", fontSize: 8, lineHeight: 13 },
+  platformMetricRow: { flexDirection: "row", gap: 8, flexWrap: "wrap", marginTop: 10 },
+  platformMetric: { color: colors.green, fontSize: 8, fontWeight: "900", letterSpacing: 0.7 },
+  tagScannerShell: { minHeight: 340, gap: 8, borderRadius: radius.lg, overflow: "hidden" },
+  tagScannerOverlay: { position: "absolute", top: 0, right: 0, bottom: 58, left: 0, alignItems: "center", justifyContent: "flex-end", paddingBottom: 18 },
+  platformPlantRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  platformNotificationCard: { gap: 5 },
+  platformNotificationRead: { opacity: 0.55 }
 });

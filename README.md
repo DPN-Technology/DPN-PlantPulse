@@ -5,7 +5,7 @@
 
 DPN PlantPulse is a mobile-first plant intelligence platform from DPN Technology. The goal is not to create a branded clone of an existing plant identifier. PlantPulse is designed around a DPN-specific idea: every plant becomes a continuously monitored biological asset with an evolving health record.
 
-## v0.5 sensor network foundation
+## v0.6 DPN Platform infrastructure foundation
 
 The repository now contains a runnable Expo / React Native application foundation for iOS, Android, and web.
 
@@ -23,7 +23,7 @@ The repository now contains a runnable Expo / React Native application foundatio
 - My Plants collection
 - plant profile + history timeline
 - Care Command queue
-- versioned local persistence with automatic v0.1 → v0.2 → v0.3 → v0.4 → v0.5 migration
+- versioned local persistence with automatic v0.1 → v0.2 → v0.3 → v0.4 → v0.5 → v0.6 migration
 - persistent per-plant scan history
 - repeat scans can update an existing plant
 - real care actions with timestamped timeline writes
@@ -57,6 +57,18 @@ The repository now contains a runnable Expo / React Native application foundatio
 - alert acknowledgement
 - measured telemetry history charts
 - sensor-aware adaptive recommendations and prediction confidence
+- offline-first per-plant revision tracking
+- LOCAL_ONLY / DIRTY / SYNCED / CONFLICT / ERROR sync states
+- authenticated DPN Platform API client contract
+- pull-before-push conflict detection
+- cloud media upload-grant contract
+- local image URI stripping before cloud serialization
+- runtime-only DPN access-token boundary
+- device registration contract
+- PlantPulse QR/deep-link tags
+- QR tag camera scanner
+- DPN Platform dashboard
+- in-app notification center/candidate engine
 - PlantPulse AI rule-based prototype
 - CI validation
 - CodeQL JavaScript/TypeScript scanning
@@ -64,7 +76,7 @@ The repository now contains a runnable Expo / React Native application foundatio
 
 ## Important prototype boundary
 
-The camera workflow, vision contract, adaptive-care engine, and v0.5 sensor telemetry stack are real, but **PlantPulse still does not ship physical DPN sensor hardware, a native BLE implementation, a production-trained botanical computer-vision model, or a calibrated agronomic prediction model**.
+The camera workflow, vision contract, adaptive-care engine, sensor telemetry stack, and v0.6 offline-first platform client are real, but **PlantPulse still does not claim that a production DPN cloud backend, DPN identity provider, physical DPN sensor hardware, native BLE implementation, production-trained botanical model, or calibrated agronomic prediction model has been deployed**.
 
 The current analysis adapter intentionally generates deterministic local prototype results. This lets us build, test, and refine the complete mobile experience before connecting the DPN Plant Intelligence backend.
 
@@ -121,7 +133,7 @@ The production score is planned to combine scan evidence, care history, environm
 
 ## Architecture
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/DATA_MODEL.md](docs/DATA_MODEL.md), [docs/VISION_API.md](docs/VISION_API.md), [docs/ADAPTIVE_CARE.md](docs/ADAPTIVE_CARE.md), and [docs/SENSOR_PROTOCOL.md](docs/SENSOR_PROTOCOL.md).
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/DATA_MODEL.md](docs/DATA_MODEL.md), [docs/VISION_API.md](docs/VISION_API.md), [docs/ADAPTIVE_CARE.md](docs/ADAPTIVE_CARE.md), and [docs/SENSOR_PROTOCOL.md](docs/SENSOR_PROTOCOL.md), and [docs/PLATFORM_API.md](docs/PLATFORM_API.md).
 
 ## Roadmap
 

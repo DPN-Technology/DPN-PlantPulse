@@ -1,4 +1,5 @@
 import { addDaysIso } from "./care";
+import { createLocalSyncMetadata } from "./syncState";
 import { Plant } from "./types";
 
 const now = new Date();
@@ -24,7 +25,8 @@ export const seedPlants: Plant[] = [
     recommendationFeedback: [],
     sensorDevices: [],
     sensorReadings: [],
-    sensorAlerts: []
+    sensorAlerts: [],
+    sync: createLocalSyncMetadata(now.toISOString())
   },
   {
     id: "palm-001",
@@ -45,7 +47,8 @@ export const seedPlants: Plant[] = [
     recommendationFeedback: [],
     sensorDevices: [],
     sensorReadings: [],
-    sensorAlerts: []
+    sensorAlerts: [],
+    sync: createLocalSyncMetadata(now.toISOString())
   },
   {
     id: "basil-001",
@@ -66,6 +69,7 @@ export const seedPlants: Plant[] = [
     recommendationFeedback: [],
     sensorDevices: [],
     sensorReadings: [],
-    sensorAlerts: []
+    sensorAlerts: [],
+    sync: createLocalSyncMetadata(now.toISOString())
   }
 ];

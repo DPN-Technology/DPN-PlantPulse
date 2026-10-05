@@ -1,10 +1,12 @@
 import { addDaysIso, clampInterval } from "./care";
+import { createLocalSyncMetadata, touchPlant } from "./syncState";
 import {
   CareAction,
   CareRecommendation,
   Plant,
   PlantProfileUpdate,
   RecommendationFeedbackValue,
+  PlantTag,
   ScanResult,
   TimelineEvent
 } from "./types";
@@ -45,14 +47,15 @@ export function createPlantFromScan(result: ScanResult): Plant {
     recommendationFeedback: [],
     sensorDevices: [],
     sensorReadings: [],
-    sensorAlerts: []
+    sensorAlerts: [],
+    sync: createLocalSyncMetadata(result.createdAt)
   };
 }
 
 export function attachScanToPlant(plant: Plant, result: ScanResult): Plant {
   const canRefreshIdentity = result.identificationStatus === "CONFIDENT";
 
-  return {
+  return touchPlant({
     ...plant,
     commonName: canRefreshIdentity ? result.commonName : plant.commonName,
     scientificName: canRefreshIdentity ? result.scientificName : plant.scientificName,
@@ -69,14 +72,14 @@ export function attachScanToPlant(plant: Plant, result: ScanResult): Plant {
       ),
       ...plant.timeline
     ].slice(0, 250)
-  };
+  }, result.createdAt);
 }
 
 export function completeCareAction(plant: Plant, action: CareAction, at = new Date()): Plant {
   const atIso = at.toISOString();
 
   if (action === "water") {
-    return {
+    return touchPlant({
       ...plant,
       lastWateredAt: atIso,
       nextWaterAt: addDaysIso(at, plant.carePlan.waterIntervalDays),
@@ -84,11 +87,11 @@ export function completeCareAction(plant: Plant, action: CareAction, at = new Da
         event("water", "Watered • next target in " + plant.carePlan.waterIntervalDays + " days", atIso),
         ...plant.timeline
       ].slice(0, 250)
-    };
+    }, atIso);
   }
 
   if (action === "fertilize") {
-    return {
+    return touchPlant({
       ...plant,
       lastFedAt: atIso,
       nextFeedAt: addDaysIso(at, plant.carePlan.feedIntervalDays),
@@ -96,20 +99,20 @@ export function completeCareAction(plant: Plant, action: CareAction, at = new Da
         event("fertilize", "Fertilized • next target in " + plant.carePlan.feedIntervalDays + " days", atIso),
         ...plant.timeline
       ].slice(0, 250)
-    };
+    }, atIso);
   }
 
   if (action === "prune") {
-    return {
+    return touchPlant({
       ...plant,
       timeline: [event("prune", "Pruning completed", atIso), ...plant.timeline].slice(0, 250)
-    };
+    }, atIso);
   }
 
-  return {
+  return touchPlant({
     ...plant,
     timeline: [event("inspect", "Plant inspection completed", atIso), ...plant.timeline].slice(0, 250)
-  };
+  }, atIso);
 }
 
 export function updatePlantProfile(plant: Plant, update: PlantProfileUpdate): Plant {
@@ -126,7 +129,7 @@ export function updatePlantProfile(plant: Plant, update: PlantProfileUpdate): Pl
   const waterScheduleChanged = waterIntervalDays !== plant.carePlan.waterIntervalDays;
   const feedScheduleChanged = feedIntervalDays !== plant.carePlan.feedIntervalDays;
 
-  return {
+  return touchPlant({
     ...plant,
     nickname: update.nickname.trim() || plant.nickname,
     location: update.location.trim() || plant.location,
@@ -142,7 +145,7 @@ export function updatePlantProfile(plant: Plant, update: PlantProfileUpdate): Pl
       feedIntervalDays
     },
     timeline: timeline.slice(0, 250)
-  };
+  }, now);
 }
 
 
@@ -157,13 +160,13 @@ export function recordRecommendationFeedback(
     at: new Date().toISOString()
   };
 
-  return {
+  return touchPlant({
     ...plant,
     recommendationFeedback: [
       feedback,
       ...plant.recommendationFeedback.filter((item) => item.recommendationId !== recommendationId)
     ].slice(0, 100)
-  };
+  }, feedback.at);
 }
 
 export function applyCareRecommendation(plant: Plant, recommendation: CareRecommendation): Plant {
@@ -203,4 +206,20 @@ export function applyCareRecommendation(plant: Plant, recommendation: CareRecomm
   };
 
   return recordRecommendationFeedback(nextPlant, recommendation.id, "APPLIED");
+}
+
+
+export function assignPlantTag(plant: Plant, tag: PlantTag): Plant {
+  if (tag.plantId !== plant.id) {
+    throw new Error("Plant tag does not belong to this plant");
+  }
+
+  return touchPlant({
+    ...plant,
+    plantTag: tag,
+    timeline: [
+      event("note", "PlantPulse tag assigned • " + tag.tagId, tag.createdAt),
+      ...plant.timeline
+    ].slice(0, 250)
+  }, tag.createdAt);
 }

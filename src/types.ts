@@ -1,4 +1,4 @@
-export type Screen = "home" | "scan" | "collection" | "care" | "sensors" | "ai" | "plant" | "result";
+export type Screen = "home" | "scan" | "collection" | "care" | "sensors" | "platform" | "ai" | "plant" | "result";
 
 export type ScanMode =
   | "identify"
@@ -24,6 +24,10 @@ export type SensorTransport = "BLE" | "WIFI_GATEWAY";
 export type SensorStatus = "ONLINE" | "STALE" | "OFFLINE" | "PAIRING" | "ERROR";
 export type SensorReadingQuality = "GOOD" | "SUSPECT" | "INVALID";
 export type SensorAlertSeverity = "INFO" | "WATCH" | "WARNING" | "CRITICAL";
+export type SyncState = "LOCAL_ONLY" | "DIRTY" | "SYNCED" | "CONFLICT" | "ERROR";
+export type IdentityStatus = "DISCONNECTED" | "AUTHENTICATED" | "EXPIRED";
+export type NotificationKind = "CARE" | "PREDICTION" | "SENSOR" | "SYNC" | "SECURITY";
+export type ImageSyncState = "LOCAL_ONLY" | "QUEUED" | "UPLOADED" | "ERROR";
 
 export interface HealthBreakdown {
   leaf: number;
@@ -97,6 +101,8 @@ export interface ScanResult {
   engine: "local-prototype" | "dpn-vision-api";
   modelVersion: string;
   prototype: boolean;
+  cloudImageKey?: string;
+  imageSyncState?: ImageSyncState;
 }
 
 export type PlantScan = ScanResult;
@@ -203,6 +209,73 @@ export interface SensorNetworkSnapshot {
   latestReadings: Partial<Record<SensorMetric, SensorReading>>;
 }
 
+export interface SyncMetadata {
+  state: SyncState;
+  localRevision: number;
+  remoteRevision?: number;
+  updatedAt: string;
+  lastSyncedAt?: string;
+  lastError?: string;
+}
+
+export interface DpnIdentityProfile {
+  userId: string;
+  displayName: string;
+  email?: string;
+  tenantId?: string;
+}
+
+export interface DpnIdentitySession {
+  status: IdentityStatus;
+  profile?: DpnIdentityProfile;
+  accessToken?: string;
+  expiresAt?: string;
+}
+
+export interface RegisteredClientDevice {
+  deviceId: string;
+  name: string;
+  platform: string;
+  registeredAt: string;
+  lastSeenAt: string;
+  pushToken?: string;
+}
+
+export interface PlatformNotification {
+  id: string;
+  kind: NotificationKind;
+  title: string;
+  body: string;
+  createdAt: string;
+  readAt?: string;
+  plantId?: string;
+}
+
+export interface SyncConflict {
+  id: string;
+  plantId: string;
+  localRevision: number;
+  remoteRevision: number;
+  detectedAt: string;
+  detail: string;
+}
+
+export interface PlatformState {
+  identity: DpnIdentitySession;
+  device?: RegisteredClientDevice;
+  notifications: PlatformNotification[];
+  conflicts: SyncConflict[];
+  lastSyncAt?: string;
+  lastSyncError?: string;
+}
+
+export interface PlantTag {
+  tagId: string;
+  plantId: string;
+  payload: string;
+  createdAt: string;
+}
+
 export interface Plant {
   id: string;
   nickname: string;
@@ -225,6 +298,9 @@ export interface Plant {
   sensorDevices: SensorDevice[];
   sensorReadings: SensorReading[];
   sensorAlerts: SensorAlert[];
+  sync: SyncMetadata;
+  plantTag?: PlantTag;
+  cloudImageKey?: string;
 }
 
 export interface PlantProfileUpdate {
