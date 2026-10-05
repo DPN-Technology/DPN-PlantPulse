@@ -135,8 +135,8 @@ export class PostgresPlatformRepository implements PlatformRepository {
     const client = await this.pool.connect();
     try {
       await client.query("begin");
-      const existing = await client.query<{ user_id: string }>(
-        `select user_id
+      const existing = await client.query<{ user_id: string; revoked_at: Date | null }>(
+        `select user_id, revoked_at
            from client_devices
           where tenant_id = $1 and device_id = $2
           for update`,
@@ -145,6 +145,9 @@ export class PostgresPlatformRepository implements PlatformRepository {
 
       if (existing.rowCount && existing.rows[0]!.user_id !== input.userId) {
         throw new ResourceConflictError("Device ID is already enrolled by another user");
+      }
+      if (existing.rowCount && existing.rows[0]!.revoked_at) {
+        throw new ResourceConflictError("Device trust has been revoked and cannot be silently reactivated");
       }
 
       const result = await client.query<{
@@ -165,8 +168,7 @@ export class PostgresPlatformRepository implements PlatformRepository {
            name = excluded.name,
            platform = excluded.platform,
            push_token = coalesce(excluded.push_token, client_devices.push_token),
-           last_seen_at = now(),
-           revoked_at = null
+           last_seen_at = now()
          returning device_id, name, platform, registered_at, last_seen_at, push_token, revoked_at`,
         [
           input.tenantId,
@@ -181,7 +183,7 @@ export class PostgresPlatformRepository implements PlatformRepository {
       const row = result.rows[0]!;
       await this.audit(client, input.tenantId, input.userId, "device.register", input.deviceId, {
         platform: input.platform,
-        reactivated: Boolean(existing.rowCount)
+        existingDevice: Boolean(existing.rowCount)
       });
       await client.query("commit");
 
