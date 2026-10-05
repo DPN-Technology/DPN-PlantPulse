@@ -38,7 +38,7 @@ class TestObjectStore implements ObjectStore {
   }
 }
 
-function app() {
+async function app() {
   return createPlatformApp({
     repository: new InMemoryPlatformRepository(),
     objectStore: new TestObjectStore(),
@@ -56,7 +56,7 @@ function plant(id: string, nickname: string) {
 }
 
 test("health is public and reports service version", async () => {
-  const server = app();
+  const server = await app();
   const response = await server.inject({ method: "GET", url: "/health" });
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.json(), {
@@ -68,14 +68,14 @@ test("health is public and reports service version", async () => {
 });
 
 test("protected endpoints reject missing identity", async () => {
-  const server = app();
+  const server = await app();
   const response = await server.inject({ method: "GET", url: "/v1/plants" });
   assert.equal(response.statusCode, 401);
   await server.close();
 });
 
 test("plant sync creates revisions and rejects stale writes", async () => {
-  const server = app();
+  const server = await app();
   const headers = { authorization: "Bearer tenant-a:user-a" };
 
   const created = await server.inject({
@@ -121,7 +121,7 @@ test("plant sync creates revisions and rejects stale writes", async () => {
 });
 
 test("plant collections are isolated by tenant", async () => {
-  const server = app();
+  const server = await app();
 
   await server.inject({
     method: "PUT",
@@ -150,7 +150,7 @@ test("plant collections are isolated by tenant", async () => {
 });
 
 test("plant tags cannot be reassigned to another plant", async () => {
-  const server = app();
+  const server = await app();
   const headers = { authorization: "Bearer tenant-a:user-a" };
 
   for (const id of ["plant-1", "plant-2"]) {
@@ -185,7 +185,7 @@ test("plant tags cannot be reassigned to another plant", async () => {
 });
 
 test("media grants validate image type and size", async () => {
-  const server = app();
+  const server = await app();
   const headers = { authorization: "Bearer tenant-a:user-a" };
 
   const accepted = await server.inject({
@@ -216,7 +216,7 @@ test("media grants validate image type and size", async () => {
 });
 
 test("device registration is tenant-scoped and idempotent", async () => {
-  const server = app();
+  const server = await app();
   const headers = { authorization: "Bearer tenant-a:user-a" };
 
   const first = await server.inject({
@@ -250,7 +250,7 @@ test("device registration is tenant-scoped and idempotent", async () => {
 
 
 test("authenticated routes are rate limited", async () => {
-  const server = createPlatformApp({
+  const server = await createPlatformApp({
     repository: new InMemoryPlatformRepository(),
     objectStore: new TestObjectStore(),
     authVerifier: new HeaderAuthVerifier(),
