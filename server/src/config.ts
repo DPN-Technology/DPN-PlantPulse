@@ -1,13 +1,20 @@
+export type PlatformAuthConfig =
+  | {
+      mode: "jwks";
+      issuer: string;
+      audience: string;
+      jwksUrl: string;
+      tenantClaim: string;
+    }
+  | {
+      mode: "development";
+    };
+
 export interface PlatformConfig {
   host: string;
   port: number;
   databaseUrl: string;
-  auth: {
-    issuer: string;
-    audience: string;
-    jwksUrl: string;
-    tenantClaim: string;
-  };
+  auth: PlatformAuthConfig;
   objectStore: {
     region: string;
     bucket: string;
@@ -34,18 +41,33 @@ function positiveInt(name: string, fallback: number): number {
   return parsed;
 }
 
+function authConfig(): PlatformAuthConfig {
+  const mode = process.env.PLATFORM_AUTH_MODE?.trim() || "jwks";
+  if (mode === "development") {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("PLATFORM_AUTH_MODE=development is forbidden when NODE_ENV=production");
+    }
+    return { mode: "development" };
+  }
+  if (mode !== "jwks") {
+    throw new Error("PLATFORM_AUTH_MODE must be jwks or development");
+  }
+  return {
+    mode: "jwks",
+    issuer: required("DPN_IDENTITY_ISSUER"),
+    audience: required("DPN_IDENTITY_AUDIENCE"),
+    jwksUrl: required("DPN_IDENTITY_JWKS_URL"),
+    tenantClaim: process.env.DPN_TENANT_CLAIM?.trim() || "tenant_id"
+  };
+}
+
 export function loadConfig(): PlatformConfig {
   const endpoint = process.env.S3_ENDPOINT?.trim();
   return {
     host: process.env.HOST?.trim() || "0.0.0.0",
     port: positiveInt("PORT", 8787),
     databaseUrl: required("DATABASE_URL"),
-    auth: {
-      issuer: required("DPN_IDENTITY_ISSUER"),
-      audience: required("DPN_IDENTITY_AUDIENCE"),
-      jwksUrl: required("DPN_IDENTITY_JWKS_URL"),
-      tenantClaim: process.env.DPN_TENANT_CLAIM?.trim() || "tenant_id"
-    },
+    auth: authConfig(),
     objectStore: {
       region: process.env.S3_REGION?.trim() || "us-east-1",
       bucket: required("S3_BUCKET"),
