@@ -32,17 +32,21 @@ export interface DpnVisionApiClientOptions {
   baseUrl: string;
   authToken?: string;
   timeoutMs?: number;
+  /** Explicitly approved, calibrated production model versions. Empty means no remote model is trusted. */
+  trustedProductionModelVersions?: readonly string[];
 }
 
 export class DpnVisionApiClient implements PlantIntelligenceClient {
   private readonly baseUrl: string;
   private readonly authToken?: string;
   private readonly timeoutMs: number;
+  private readonly trustedProductionModelVersions: ReadonlySet<string>;
 
   constructor(options: DpnVisionApiClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, "");
     this.authToken = options.authToken;
     this.timeoutMs = options.timeoutMs ?? 30_000;
+    this.trustedProductionModelVersions = new Set(options.trustedProductionModelVersions ?? []);
   }
 
   async analyze(request: AnalyzeScanRequest): Promise<ScanResult> {
@@ -81,11 +85,23 @@ export class DpnVisionApiClient implements PlantIntelligenceClient {
         throw new Error("DPN Vision API returned an invalid scan payload");
       }
 
-      return applySafetyGuard({
+      const modelVersion = typeof result.modelVersion === "string" ? result.modelVersion.trim() : "";
+      const trustedProductionModel =
+        modelVersion.length > 0 && this.trustedProductionModelVersions.has(modelVersion);
+
+      const boundedResult: ScanResult = {
         ...result,
+        modelVersion: modelVersion || "unversioned-remote-model",
         engine: "dpn-vision-api",
-        prototype: false
-      });
+        prototype: !trustedProductionModel
+      };
+
+      if (!trustedProductionModel) {
+        boundedResult.toxicity =
+          "Remote model is not approved for production safety decisions. Do not rely on this scan for ingestion or pet/child safety guidance.";
+      }
+
+      return applySafetyGuard(boundedResult);
     } finally {
       clearTimeout(timer);
     }
