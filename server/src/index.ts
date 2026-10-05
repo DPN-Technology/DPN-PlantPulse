@@ -7,9 +7,10 @@ import { PostgresNotificationOutboxRepository } from "./notificationRepository.j
 import { ExpoPushProvider } from "./pushProvider.js";
 import { PlantPulsePushWorker } from "./pushWorker.js";
 import { PlantPulseObservability } from "./observability.js";
+import { PlantPulseMediaLifecycleWorker } from "./mediaLifecycleWorker.js";
 
 const config = loadConfig();
-const observability = new PlantPulseObservability("0.12.0");
+const observability = new PlantPulseObservability("0.13.0");
 const repository = new PostgresPlatformRepository(config.databaseUrl);
 const notificationRepository = new PostgresNotificationOutboxRepository(config.databaseUrl);
 const authVerifier = config.auth.mode === "development"
@@ -54,9 +55,24 @@ const pushWorker = config.notifications.enabled
 
 pushWorker?.start();
 
+const mediaLifecycleWorker = config.objectStore.cleanupEnabled
+  ? new PlantPulseMediaLifecycleWorker({
+      repository,
+      objectStore,
+      intervalMs: config.objectStore.cleanupIntervalMs,
+      batchSize: config.objectStore.cleanupBatchSize,
+      orphanGraceMs: config.objectStore.orphanGraceMs,
+      logger: app.log,
+      observability
+    })
+  : undefined;
+
+mediaLifecycleWorker?.start();
+
 async function shutdown(signal: string) {
   app.log.info({ signal }, "Shutting down PlantPulse platform");
   pushWorker?.stop();
+  mediaLifecycleWorker?.stop();
   await app.close();
   process.exit(0);
 }
