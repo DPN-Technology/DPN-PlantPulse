@@ -106,14 +106,14 @@ export class InMemoryNotificationOutboxRepository implements NotificationOutboxR
     row.status = "TICKETED";
     row.ticketId = ticketId;
     row.nextAttemptAt = nextCheckAt.getTime();
-    row.lastError = undefined;
+    delete row.lastError;
   }
 
   async markDelivered(id: string): Promise<void> {
     const row = this.rows.get(id);
     if (!row) return;
     row.status = "DELIVERED";
-    row.lastError = undefined;
+    delete row.lastError;
   }
 
   async markRetry(id: string, error: string, nextAttemptAt: Date): Promise<void> {
