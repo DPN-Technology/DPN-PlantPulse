@@ -3,6 +3,7 @@ import {
   NotificationOutboxRepository,
   NotificationReceiptCandidate
 } from "./notificationTypes.js";
+import { PushReliabilityObserver } from "./observability.js";
 import {
   ExpoPushMessage,
   ExpoPushReceipt,
@@ -18,6 +19,7 @@ export interface PushWorkerOptions {
   receiptDelayMs?: number;
   maxAttempts?: number;
   logger?: Pick<Console, "info" | "warn" | "error">;
+  observer?: PushReliabilityObserver;
 }
 
 function nextRetryAt(attempt: number): Date {
@@ -64,6 +66,7 @@ export class PlantPulsePushWorker {
   private readonly receiptDelayMs: number;
   private readonly maxAttempts: number;
   private readonly logger: Pick<Console, "info" | "warn" | "error">;
+  private readonly observer?: PushReliabilityObserver;
   private timer: ReturnType<typeof setInterval> | undefined;
   private running = false;
 
@@ -75,6 +78,7 @@ export class PlantPulsePushWorker {
     this.receiptDelayMs = options.receiptDelayMs ?? 15 * 60_000;
     this.maxAttempts = options.maxAttempts ?? 6;
     this.logger = options.logger ?? console;
+    this.observer = options.observer;
   }
 
   start(): void {
@@ -97,7 +101,9 @@ export class PlantPulsePushWorker {
     try {
       await this.processPending();
       await this.processReceipts();
+      this.observer?.recordPushWorkerCycle("SUCCESS");
     } catch (error) {
+      this.observer?.recordPushWorkerCycle("FAILED");
       this.logger.error("PlantPulse push worker cycle failed", error);
     } finally {
       this.running = false;
@@ -107,11 +113,13 @@ export class PlantPulsePushWorker {
   private async processPending(): Promise<void> {
     const deliveries = await this.repository.leasePending(this.batchSize);
     if (!deliveries.length) return;
+    for (const _delivery of deliveries) this.observer?.recordPushOutcome("attempted");
 
     let tickets: ExpoPushTicket[];
     try {
       tickets = await this.provider.send(deliveries.map(messageFromDelivery));
     } catch (error) {
+      this.observer?.recordPushOutcome("provider_error");
       const message = error instanceof Error ? error.message : "Push provider send failed";
       await Promise.all(deliveries.map((delivery) =>
         this.retryOrDead(delivery.id, delivery.attemptCount, message)
@@ -127,6 +135,7 @@ export class PlantPulsePushWorker {
       }
 
       if (ticket.status === "ok") {
+        this.observer?.recordPushOutcome("ticketed");
         await this.repository.markTicketed(
           delivery.id,
           ticket.id,
@@ -136,17 +145,20 @@ export class PlantPulsePushWorker {
       }
 
       if (isInvalidDevice(ticket)) {
+        this.observer?.recordPushOutcome("invalid_device");
         await this.repository.disablePushToken(
           delivery.tenantId,
           delivery.deviceId,
           delivery.pushToken
         );
         await this.repository.markDead(delivery.id, "DeviceNotRegistered: " + ticket.message);
+        this.observer?.recordPushOutcome("dead");
         return;
       }
 
       if (isPermanentProviderError(ticket)) {
         await this.repository.markDead(delivery.id, (providerErrorCode(ticket) ?? "PushError") + ": " + ticket.message);
+        this.observer?.recordPushOutcome("dead");
         return;
       }
 
@@ -162,6 +174,7 @@ export class PlantPulsePushWorker {
     try {
       receipts = await this.provider.getReceipts(candidates.map((item) => item.pushTicketId));
     } catch (error) {
+      this.observer?.recordPushOutcome("provider_error");
       const nextCheck = new Date(Date.now() + 5 * 60_000);
       await Promise.all(candidates.map((item) => this.repository.rescheduleReceipt(item.id, nextCheck)));
       return;
@@ -179,21 +192,25 @@ export class PlantPulsePushWorker {
 
       if (receipt.status === "ok") {
         await this.repository.markDelivered(candidate.id);
+        this.observer?.recordPushOutcome("delivered");
         return;
       }
 
       if (isInvalidDevice(receipt)) {
+        this.observer?.recordPushOutcome("invalid_device");
         await this.repository.disablePushToken(
           candidate.tenantId,
           candidate.deviceId,
           candidate.pushToken
         );
         await this.repository.markDead(candidate.id, "DeviceNotRegistered: " + receipt.message);
+        this.observer?.recordPushOutcome("dead");
         return;
       }
 
       if (isPermanentProviderError(receipt)) {
         await this.repository.markDead(candidate.id, (providerErrorCode(receipt) ?? "PushError") + ": " + receipt.message);
+        this.observer?.recordPushOutcome("dead");
         return;
       }
 
@@ -204,8 +221,10 @@ export class PlantPulsePushWorker {
   private async retryOrDead(id: string, attemptCount: number, error: string): Promise<void> {
     if (attemptCount >= this.maxAttempts) {
       await this.repository.markDead(id, error);
+      this.observer?.recordPushOutcome("dead");
       return;
     }
     await this.repository.markRetry(id, error, nextRetryAt(attemptCount));
+    this.observer?.recordPushOutcome("retry");
   }
 }
