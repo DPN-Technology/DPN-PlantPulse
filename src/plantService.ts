@@ -6,6 +6,7 @@ import {
   Plant,
   PlantProfileUpdate,
   RecommendationFeedbackValue,
+  PlantTag,
   ScanResult,
   TimelineEvent
 } from "./types";
@@ -205,4 +206,20 @@ export function applyCareRecommendation(plant: Plant, recommendation: CareRecomm
   };
 
   return recordRecommendationFeedback(nextPlant, recommendation.id, "APPLIED");
+}
+
+
+export function assignPlantTag(plant: Plant, tag: PlantTag): Plant {
+  if (tag.plantId !== plant.id) {
+    throw new Error("Plant tag does not belong to this plant");
+  }
+
+  return touchPlant({
+    ...plant,
+    plantTag: tag,
+    timeline: [
+      event("note", "PlantPulse tag assigned • " + tag.tagId, tag.createdAt),
+      ...plant.timeline
+    ].slice(0, 250)
+  }, tag.createdAt);
 }
