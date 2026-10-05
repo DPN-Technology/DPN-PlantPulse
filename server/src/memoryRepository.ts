@@ -87,6 +87,9 @@ export class InMemoryPlatformRepository implements PlatformRepository {
     if (existing && existing.userId !== input.userId) {
       throw new ResourceConflictError("Device ID is already enrolled by another user");
     }
+    if (existing?.revokedAt) {
+      throw new ResourceConflictError("Device trust has been revoked and cannot be silently reactivated");
+    }
 
     const next: StoredDevice = {
       tenantId: input.tenantId,
@@ -115,11 +118,11 @@ export class InMemoryPlatformRepository implements PlatformRepository {
     if (!existing || existing.userId !== userId || existing.revokedAt) {
       throw new ResourceNotFoundError("Active device does not exist");
     }
+    const { pushToken: _pushToken, ...rest } = existing;
     this.devices.set(key, {
-      ...existing,
-      pushToken: undefined,
+      ...rest,
       revokedAt: new Date().toISOString()
-    } as StoredDevice);
+    });
   }
 
   async getTenantOperationalHealth(tenantId: string, userId: string): Promise<TenantOperationalHealth> {
