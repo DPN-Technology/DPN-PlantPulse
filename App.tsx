@@ -34,8 +34,14 @@ import { buildLocalNotifications, mergeNotifications } from "./src/notificationE
 import { createPlantTag, parsePlantTagPayload } from "./src/plantTags";
 import { defaultPlatformState, loadPlatformState, savePlatformState } from "./src/platformStorage";
 import {
+  prepareDpnOidcClient,
+  PreparedDpnOidcClient,
+  signInWithDpnOidc
+} from "./src/oidcIdentity";
+import {
   connectDevelopmentPlatform,
   disconnectPlatform,
+  installIdentitySession,
   registerPushAndDevice,
   resolvePlatformConflict,
   restorePlatformRuntime,
@@ -114,6 +120,9 @@ export default function App() {
   const [platformLoaded, setPlatformLoaded] = useState(false);
   const [platformState, setPlatformState] = useState<PlatformState>(defaultPlatformState);
   const [platformSyncing, setPlatformSyncing] = useState(false);
+  const [oidcClient, setOidcClient] = useState<PreparedDpnOidcClient | null>(null);
+  const [oidcPreparing, setOidcPreparing] = useState(false);
+  const [oidcError, setOidcError] = useState<string | null>(null);
 
   useEffect(() => {
     loadPlants(seedPlants).then((stored) => {
@@ -126,6 +135,20 @@ export default function App() {
     if (!loaded) return;
     savePlants(plants).catch(() => undefined);
   }, [plants, loaded]);
+
+  useEffect(() => {
+    setOidcPreparing(true);
+    prepareDpnOidcClient()
+      .then((prepared) => {
+        setOidcClient(prepared);
+        setOidcError(null);
+      })
+      .catch((error) => {
+        setOidcClient(null);
+        setOidcError(error instanceof Error ? error.message : "DPN Identity OIDC is unavailable.");
+      })
+      .finally(() => setOidcPreparing(false));
+  }, []);
 
   useEffect(() => {
     loadPlatformState()
@@ -279,6 +302,22 @@ export default function App() {
     }
   };
 
+  const signInOidcRuntime = async () => {
+    if (!oidcClient) {
+      Alert.alert("DPN Identity unavailable", oidcError ?? "OIDC client is not ready.");
+      return;
+    }
+
+    try {
+      const identity = await signInWithDpnOidc(oidcClient);
+      const next = await installIdentitySession(platformState, identity);
+      setPlatformState(next);
+      Alert.alert("DPN Identity connected", "Authorization Code + PKCE sign-in completed.");
+    } catch (error) {
+      Alert.alert("DPN Identity sign-in failed", error instanceof Error ? error.message : "OIDC sign-in did not complete.");
+    }
+  };
+
   const connectDevelopmentRuntime = async (baseUrl: string, tenantId: string, userId: string) => {
     try {
       const next = await connectDevelopmentPlatform(platformState, baseUrl, tenantId, userId);
@@ -419,6 +458,11 @@ export default function App() {
           onReadNotification={markNotificationRead}
           onSync={() => void runPlatformSync(true)}
           onConnectDevelopment={(baseUrl, tenantId, userId) => void connectDevelopmentRuntime(baseUrl, tenantId, userId)}
+          oidcIssuer={oidcClient?.issuer}
+          oidcReady={Boolean(oidcClient)}
+          oidcPreparing={oidcPreparing}
+          oidcError={oidcError}
+          onOidcSignIn={() => void signInOidcRuntime()}
           onDisconnect={() => void disconnectPlatformRuntime()}
           onRegisterPush={() => void registerPushRuntime()}
           onResolveConflict={resolveConflictRuntime}
@@ -1589,6 +1633,11 @@ function PlatformScreen({
   onReadNotification,
   onSync,
   onConnectDevelopment,
+  oidcIssuer,
+  oidcReady,
+  oidcPreparing,
+  oidcError,
+  onOidcSignIn,
   onDisconnect,
   onRegisterPush,
   onResolveConflict
@@ -1600,6 +1649,11 @@ function PlatformScreen({
   onReadNotification: (notificationId: string) => void;
   onSync: () => void;
   onConnectDevelopment: (baseUrl: string, tenantId: string, userId: string) => void;
+  oidcIssuer?: string;
+  oidcReady: boolean;
+  oidcPreparing: boolean;
+  oidcError: string | null;
+  onOidcSignIn: () => void;
   onDisconnect: () => void;
   onRegisterPush: () => void;
   onResolveConflict: (conflict: SyncConflict, strategy: "KEEP_LOCAL" | "USE_REMOTE") => void;
@@ -1657,9 +1711,9 @@ function PlatformScreen({
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
       <DpnHeader
-        eyebrow="DPN PLANTPULSE // PLATFORM V0.8"
+        eyebrow="DPN PLANTPULSE // PLATFORM V0.9"
         title="DPN Platform"
-        subtitle="Secure identity, signed media upload, live cloud synchronization, conflict recovery, device enrollment, and PlantPulse tags."
+        subtitle="DPN Identity OIDC + PKCE, renewable secure sessions, signed media, synchronized plant records, device trust, and conflict recovery."
       />
 
       <View style={styles.statGrid}>
@@ -1688,6 +1742,7 @@ function PlatformScreen({
               {platformState.identity.profile?.displayName ?? "No DPN account connected"}
             </Text>
             <Text style={styles.timelineDate}>{platformState.platformBaseUrl ?? "NO PLATFORM ENDPOINT"}</Text>
+            <Text style={styles.timelineDate}>IDENTITY PROVIDER • {platformState.identity.provider?.toUpperCase() ?? "NONE"}</Text>
           </View>
           <Pill
             label={platformState.identity.status}
@@ -1703,7 +1758,20 @@ function PlatformScreen({
             <SecondaryButton label="REGISTER PUSH + DEVICE" onPress={onRegisterPush} />
             <SecondaryButton label="DISCONNECT DPN IDENTITY" onPress={onDisconnect} />
           </View>
-        ) : null}
+        ) : (
+          <View style={styles.buttonStack}>
+            <PrimaryButton
+              label={oidcPreparing ? "PREPARING DPN IDENTITY..." : "SIGN IN WITH DPN ONE"}
+              onPress={onOidcSignIn}
+              disabled={!oidcReady || oidcPreparing}
+            />
+            <Text style={styles.platformSecurityNote}>
+              {oidcReady
+                ? "OIDC READY • " + (oidcIssuer ?? "configured issuer") + " • Authorization Code + PKCE"
+                : (oidcError ?? "Production DPN Identity client registration is not configured.")}
+            </Text>
+          </View>
+        )}
       </Card>
 
       {__DEV__ ? (
