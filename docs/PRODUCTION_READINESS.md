@@ -8,8 +8,8 @@
 | Domain | Current state | Production gate |
 | --- | --- | --- |
 | Mobile client | Implemented | signed development/release builds, crash/error telemetry, upgrade path |
-| DPN Identity client boundary | Implemented contract | production DPN One/OIDC authorization flow |
-| Secure native session storage | Implemented | renewable token lifecycle + revocation |
+| DPN Identity client boundary | OIDC Authorization Code + PKCE client implemented | production DPN One/OIDC authorization-server deployment and client registration |
+| Secure native session storage | Implemented with renewable OIDC credentials | production provider revocation/rotation evidence |
 | Platform API | Implemented | production DNS/TLS/API gateway deployment |
 | PostgreSQL repository | Implemented | managed production database, backups, recovery proof |
 | Object-storage signing | Implemented | production bucket policy, encryption/KMS, lifecycle and completion verification |
@@ -26,14 +26,16 @@
 
 ### 1. DPN Identity / OIDC
 
-Production mobile identity should use an authorization-code flow with PKCE or the DPN One equivalent.
+PlantPulse v0.9 now implements the mobile authorization-code + PKCE client, OpenID Connect discovery, UserInfo profile loading, refresh-token renewal, native SecureStore persistence, and best-effort provider revocation. DPN One remains the intended authority, but its repository still describes the authorization server as production-roadmap work.
 
 Required outcomes:
 
-- no password collection inside PlantPulse;
-- short-lived access tokens;
-- renewable session lifecycle;
-- explicit logout and server-side revocation path;
+- [x] no password collection inside PlantPulse;
+- [x] short-lived access-token lifecycle support;
+- [x] renewable refresh-token lifecycle;
+- [x] explicit logout with provider revocation when the endpoint exists;
+- [ ] provision production DPN One OIDC issuer/JWKS/token/UserInfo/revocation endpoints;
+- [ ] register the PlantPulse public client and redirect URI;
 - device-aware session records;
 - issuer, audience and tenant verification remains enforced by the platform service;
 - native secrets remain in secure platform storage, never AsyncStorage.
