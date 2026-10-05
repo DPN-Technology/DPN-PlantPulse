@@ -267,3 +267,54 @@ The Fastify service applies request throttling before route handlers execute. Th
 ### Deployment boundary
 
 The service, schema, container, migrations, and local Postgres/MinIO environment are implemented. v0.7 does not claim that production DPN identity, managed PostgreSQL, object storage, DNS, TLS, or an API gateway have already been provisioned.
+
+
+## v0.8 mobile-to-platform connectivity
+
+```text
+PlantPulse Mobile
+    |
+    +--> Secure Identity
+    |      +-- native SecureStore
+    |      +-- access token never enters AsyncStorage
+    |      +-- profile/expiry metadata may persist
+    |
+    +--> Media Sync
+    |      +-- read local image blob
+    |      +-- POST /v1/media/uploads
+    |      +-- signed PUT to object storage
+    |      +-- persist cloud object key
+    |      +-- mark plant record dirty
+    |
+    +--> Record Sync
+    |      +-- pull remote revisions
+    |      +-- detect divergent changes
+    |      +-- push cloud-safe records
+    |      +-- claim PlantPulse tags
+    |      +-- enroll stable client device
+    |
+    +--> Recovery
+           +-- persisted retry attempt
+           +-- exponential nextRetryAt
+           +-- retry when app becomes active
+           +-- KEEP LOCAL
+           +-- USE REMOTE
+```
+
+### Secure session boundary
+
+On Android and iOS, v0.8 stores the current DPN access-token session with Expo SecureStore. The AsyncStorage platform record intentionally strips the bearer token and keeps only non-secret profile/expiry metadata. On web, the token remains runtime-only.
+
+The development connector is compiled into development builds for the local v0.7 Docker stack and is blocked from use by release builds. Production DPN Identity/OIDC provisioning remains separate work.
+
+### Media synchronization invariant
+
+A local image URI is never serialized to the cloud as if it were remotely retrievable. PlantPulse first requests a signed upload grant, uploads the image bytes, stores the returned object key, marks the plant record dirty, and only then pushes the cloud-safe plant record. Repeated references to the same local URI are uploaded once per sync run.
+
+### Retry behavior
+
+v0.8 does not claim an OS-level background scheduler. Failed sync/media work records an exponential retry time and is retried when the application becomes active. Native BackgroundTask scheduling remains future work.
+
+### Push boundary
+
+The client can request notification permission, obtain an Expo push token when the build/project configuration supports it, and attach that token to DPN device enrollment. Actual remote notification delivery still requires production push credentials and a server-side delivery worker/provider.
