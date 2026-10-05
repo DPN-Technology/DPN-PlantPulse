@@ -3,7 +3,7 @@ import test from "node:test";
 import { randomUUID } from "node:crypto";
 import { PostgresPlatformRepository } from "../src/postgresRepository.js";
 import { PostgresNotificationOutboxRepository } from "../src/notificationRepository.js";
-import { ResourceConflictError, RevisionConflictError } from "../src/types.js";
+import { ResourceConflictError, ResourceNotFoundError, RevisionConflictError } from "../src/types.js";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 
@@ -289,6 +289,109 @@ test("PostgreSQL operation reports preserve the newest device sync evidence", { 
     assert.equal(health.operations.lastBackgroundSyncAt, newer.toISOString());
     assert.equal(health.operations.lastSyncResult, "SUCCESS");
     assert.equal(health.operations.failedDevices, 0);
+  } finally {
+    await repository.close();
+  }
+});
+
+
+test("PostgreSQL media lifecycle binds verified objects to one plant and cleans detached media", { skip: !databaseUrl }, async () => {
+  const repository = new PostgresPlatformRepository(databaseUrl!);
+  const tenantId = "media-tenant-" + randomUUID();
+  const userId = "media-user-" + randomUUID();
+  const plantId = "plant-" + randomUUID();
+  const otherPlantId = "plant-" + randomUUID();
+  const uploadId = randomUUID();
+  const objectKey = "tenants/" + tenantId + "/plants/" + plantId + "/media/" + uploadId + ".jpg";
+
+  try {
+    await repository.createMediaReservation({
+      uploadId,
+      tenantId,
+      userId,
+      plantId,
+      mediaKind: "PLANT_PRIMARY",
+      objectKey,
+      contentType: "image/jpeg",
+      expectedByteLength: 512,
+      expiresAt: new Date(Date.now() + 60_000).toISOString()
+    });
+
+    await assert.rejects(
+      repository.pushPlant({
+        tenantId,
+        actorUserId: userId,
+        plantId,
+        plant: { id: plantId, nickname: "Unverified", cloudImageKey: objectKey },
+        clientRevision: 1
+      }),
+      (error: unknown) => error instanceof ResourceConflictError
+    );
+
+    const verified = await repository.markMediaVerified(
+      tenantId,
+      userId,
+      uploadId,
+      512,
+      "etag-512"
+    );
+    assert.equal(verified.status, "VERIFIED");
+
+    const created = await repository.pushPlant({
+      tenantId,
+      actorUserId: userId,
+      plantId,
+      plant: { id: plantId, nickname: "Verified", cloudImageKey: objectKey },
+      clientRevision: 1
+    });
+    assert.equal(created.remoteRevision, 1);
+
+    const attached = await repository.getMediaUpload(tenantId, userId, uploadId);
+    assert.equal(attached.status, "ATTACHED");
+
+    await assert.rejects(
+      repository.pushPlant({
+        tenantId,
+        actorUserId: userId,
+        plantId: otherPlantId,
+        plant: { id: otherPlantId, nickname: "Other", cloudImageKey: objectKey },
+        clientRevision: 1
+      }),
+      (error: unknown) => error instanceof ResourceConflictError
+    );
+
+    await assert.rejects(
+      repository.getMediaUpload(tenantId, "another-user", uploadId),
+      (error: unknown) => error instanceof ResourceNotFoundError
+    );
+
+    await repository.pushPlant({
+      tenantId,
+      actorUserId: userId,
+      plantId,
+      plant: { id: plantId, nickname: "Detached" },
+      baseRemoteRevision: 1,
+      clientRevision: 2
+    });
+
+    const detached = await repository.getMediaUpload(tenantId, userId, uploadId);
+    assert.equal(detached.status, "VERIFIED");
+    assert.ok(detached.detachedAt);
+
+    const cleanup = await repository.leaseMediaCleanup(
+      10,
+      new Date(Date.now() + 60_000)
+    );
+    assert.equal(cleanup.length, 1);
+    assert.equal(cleanup[0]!.uploadId, uploadId);
+
+    await repository.markMediaCleanupDeleted(uploadId);
+    const deleted = await repository.getMediaUpload(tenantId, userId, uploadId);
+    assert.equal(deleted.status, "DELETED");
+
+    const health = await repository.getTenantOperationalHealth(tenantId, userId);
+    assert.equal(health.media.deleted, 1);
+    assert.equal(health.media.attached, 0);
   } finally {
     await repository.close();
   }
