@@ -274,7 +274,17 @@ export interface PlatformSyncSummary {
   failed: number;
   conflicts: number;
   claimedTags: number;
+  queuedNotifications: number;
   completedAt: string;
+}
+
+export interface BackgroundSyncState {
+  availability: "UNKNOWN" | "AVAILABLE" | "RESTRICTED";
+  registered: boolean;
+  registeredAt?: string;
+  lastRunAt?: string;
+  lastResult?: "SUCCESS" | "FAILED" | "SKIPPED";
+  lastError?: string;
 }
 
 export interface PlatformState {
@@ -289,6 +299,7 @@ export interface PlatformState {
   lastSyncSummary?: PlatformSyncSummary;
   syncAttempt?: number;
   nextRetryAt?: string;
+  backgroundSync?: BackgroundSyncState;
 }
 
 export interface PlantTag {

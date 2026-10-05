@@ -13,10 +13,10 @@
 | Platform API | Implemented | production DNS/TLS/API gateway deployment |
 | PostgreSQL repository | Implemented | managed production database, backups, recovery proof |
 | Object-storage signing | Implemented | production bucket policy, encryption/KMS, lifecycle and completion verification |
-| Offline-first synchronization | Implemented | background task scheduling + multi-device end-to-end tests |
+| Offline-first synchronization | Native deferrable background task implemented | signed physical-device execution proof + multi-device end-to-end tests |
 | Conflict handling | Implemented | production multi-device validation |
 | Device enrollment | Implemented | revocation/admin lifecycle |
-| Push client enrollment | Implemented scaffold | server outbox worker/provider + production credentials |
+| Push delivery | Client enrollment + server outbox/Expo ticket-receipt worker implemented | production push credentials, device proof and delivery SLO evidence |
 | Botanical vision | Prototype/provider contract | trained model, calibration, provenance, evaluation |
 | Sensor network | Protocol/telemetry model | native BLE hardware integration and device identity |
 | Observability | Development logs | metrics, traces, dashboards, alerts, SLOs |
@@ -42,11 +42,11 @@ Required outcomes:
 
 ### 2. Background synchronization
 
-Current v0.8 retry is foreground/app-resume based.
+PlantPulse v0.10 adds native deferrable background synchronization through Expo BackgroundTask / TaskManager while retaining foreground/app-resume retry.
 
 Production background sync requires:
 
-- native background task scheduling;
+- [x] native background task scheduling;
 - bounded retry windows;
 - power/network-aware execution;
 - idempotent sync operations;
@@ -73,11 +73,13 @@ The mobile client can request permission and obtain a compatible push token when
 
 Production delivery still needs:
 
-- notification outbox worker;
-- provider credentials stored server-side;
-- token invalidation handling;
-- retry/backoff;
-- delivery audit metadata;
+- [x] notification outbox worker;
+- [x] Expo Push Service provider transport;
+- [x] token invalidation handling;
+- [x] retry/backoff;
+- [x] ticket/receipt delivery state;
+- [ ] production provider credentials/environment proof;
+- [ ] delivery metrics / SLO evidence;
 - preference controls;
 - care / prediction / sensor / sync / security category policy.
 

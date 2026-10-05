@@ -58,6 +58,7 @@ services:
       S3_FORCE_PATH_STYLE: "true"
       AWS_ACCESS_KEY_ID: plantpulse
       AWS_SECRET_ACCESS_KEY: plantpulse-local-secret
+      PUSH_WORKER_ENABLED: "false"
     command: ["/bin/sh", "-c", "node dist/migrate.js && node dist/index.js"]
     ports:
       - "8787:8787"

@@ -121,8 +121,8 @@
 - [ ] Production PlantPulse cloud API deployment
 - [ ] Secure credential refresh storage
 - [x] Actual image/object upload execution
-- [ ] Background synchronization
-- [ ] Push notification delivery
+- [x] Native deferrable background synchronization
+- [x] Push notification delivery service path
 - [x] Conflict-resolution editor
 - [ ] Multi-device end-to-end integration tests
 
@@ -153,8 +153,8 @@
 - [ ] Production PostgreSQL deployment
 - [ ] Production object-storage bucket/KMS policy
 - [ ] Production DNS/TLS/API gateway
-- [ ] Background sync scheduler on mobile
-- [ ] Push notification worker/provider
+- [x] Background sync scheduler on mobile
+- [x] Push notification worker/provider
 - [ ] Server-side media completion callback/verification
 - [ ] Conflict-resolution UI
 - [ ] Production observability/SLO dashboards
@@ -181,8 +181,9 @@
 - [x] mobile connectivity integration tests in CI
 - [x] Production-configurable DPN Identity/OIDC sign-in UI
 - [x] renewable refresh-token flow
-- [ ] native background-task synchronization
-- [ ] production remote push worker/provider
+- [x] native background-task synchronization
+- [x] server push outbox worker/provider implementation
+- [ ] production push credentials/environment validation
 - [ ] server-side media completion verification
 - [ ] production multi-device end-to-end environment
 
@@ -193,8 +194,9 @@
 - [x] PKCE native authorization flow
 - [x] renewable access-token lifecycle
 - [x] explicit provider revocation attempt on logout
-- [ ] native background task synchronization
-- [ ] production push outbox worker/provider
+- [x] native background task synchronization
+- [x] production-capable push outbox worker/provider
+- [ ] production push credential and delivery-environment proof
 - [ ] media completion verification
 - [ ] production object lifecycle / deletion path
 - [ ] managed PostgreSQL environment
@@ -209,6 +211,33 @@
 - [ ] signed mobile development/release builds
 
 See [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md) for the evidence gate.
+
+## v0.10 — Background sync + push delivery
+- [x] Expo BackgroundTask integration
+- [x] global TaskManager worker definition
+- [x] 15-minute minimum native scheduling policy
+- [x] background SecureStore identity restoration/refresh
+- [x] background media + revision synchronization
+- [x] persisted background task result telemetry
+- [x] development-only forced background-task trigger
+- [x] task unregister on DPN identity disconnect
+- [x] authenticated notification queue API
+- [x] tenant/user/device-scoped notification fanout
+- [x] source-ID delivery deduplication
+- [x] PostgreSQL SKIP LOCKED delivery leasing
+- [x] Expo Push Service batching
+- [x] push ticket persistence
+- [x] delayed push receipt validation
+- [x] exponential transient retry
+- [x] dead-letter state
+- [x] DeviceNotRegistered token retirement
+- [x] notification queue API tests
+- [x] push worker tests
+- [x] PostgreSQL outbox integration test
+- [ ] signed physical-device background execution proof
+- [ ] production push credential validation
+- [ ] notification preference center
+- [ ] delivery metrics/SLO dashboard
 
 ## Product families
 - PlantPulse Home

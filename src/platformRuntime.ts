@@ -1,6 +1,6 @@
 import { Platform } from "react-native";
 import { createRuntimeIdentitySession, expireIdentitySession, isIdentitySessionUsable } from "./identity";
-import { mergeNotifications } from "./notificationEngine";
+import { buildLocalNotifications, mergeNotifications } from "./notificationEngine";
 import { getOrCreateClientDeviceId, clientDeviceName } from "./deviceIdentity";
 import { uploadPendingPlantMedia } from "./mediaSync";
 import { getPlatformRuntimeConfig, normalizePlatformBaseUrl } from "./platformConfig";
@@ -203,6 +203,18 @@ export async function synchronizePlatformRuntime(
     }
 
     const device = await enrollDevice(api, renewedState.device);
+
+    const notificationMap = new Map(
+      [...buildLocalNotifications(sync.plants), ...sync.notifications]
+        .map((item) => [item.id, item] as const)
+    );
+    let queuedNotifications = 0;
+    try {
+      queuedNotifications = await api.queueNotifications([...notificationMap.values()]);
+    } catch {
+      // Push publication is retried by later sync cycles and server-side source ID deduplication.
+    }
+
     const conflictsByPlant = new Map<string, SyncConflict>();
     for (const item of [...renewedState.conflicts, ...sync.conflicts]) {
       conflictsByPlant.set(item.plantId, item);
@@ -229,6 +241,7 @@ export async function synchronizePlatformRuntime(
           failed,
           conflicts: conflicts.length,
           claimedTags,
+          queuedNotifications,
           completedAt
         },
         syncAttempt: failed > 0 ? attempt : 0,

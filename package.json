@@ -1,6 +1,6 @@
 {
   "name": "dpn-plantpulse",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "private": true,
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
@@ -29,7 +29,9 @@
     "expo-device": "~57.0.2",
     "expo-auth-session": "~57.0.13",
     "expo-crypto": "~57.0.3",
-    "expo-web-browser": "~57.0.3"
+    "expo-web-browser": "~57.0.3",
+    "expo-background-task": "~57.0.21",
+    "expo-task-manager": "~57.0.21"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",

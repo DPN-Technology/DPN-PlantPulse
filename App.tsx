@@ -17,6 +17,11 @@ import {
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import { BottomNav, Card, DpnHeader, MetricBar, Pill, ScoreBadge } from "./src/components";
+import {
+  ensurePlantPulseBackgroundSyncRegistered,
+  triggerPlantPulseBackgroundSyncForTesting,
+  unregisterPlantPulseBackgroundSync
+} from "./src/backgroundSync";
 import { careDueLabel, daysUntil } from "./src/care";
 import { buildCareIntelligence } from "./src/careIntelligence";
 import { seedPlants } from "./src/data";
@@ -167,6 +172,26 @@ export default function App() {
 
   useEffect(() => {
     if (!platformLoaded) return;
+    if (!platformState.platformBaseUrl || platformState.identity.status === "DISCONNECTED") return;
+
+    ensurePlantPulseBackgroundSyncRegistered(platformState.backgroundSync)
+      .then((backgroundSync) => {
+        setPlatformState((current) => ({ ...current, backgroundSync }));
+      })
+      .catch((error) => {
+        setPlatformState((current) => ({
+          ...current,
+          backgroundSync: {
+            availability: "RESTRICTED",
+            registered: false,
+            lastError: error instanceof Error ? error.message : "Background sync registration failed."
+          }
+        }));
+      });
+  }, [platformLoaded, platformState.platformBaseUrl, platformState.identity.status]);
+
+  useEffect(() => {
+    if (!platformLoaded) return;
     const generated = buildLocalNotifications(plants);
     setPlatformState((current) => ({
       ...current,
@@ -293,6 +318,7 @@ export default function App() {
               " • Pulled " + summary.pulled +
               " • Images " + summary.uploadedImages +
               " • Conflicts " + summary.conflicts +
+              " • Push " + summary.queuedNotifications +
               (summary.failed > 0 ? " • Retry " + summary.failed : "")
           );
         }
@@ -329,8 +355,20 @@ export default function App() {
   };
 
   const disconnectPlatformRuntime = async () => {
+    const backgroundSync = await unregisterPlantPulseBackgroundSync(platformState.backgroundSync);
     const next = await disconnectPlatform(platformState);
-    setPlatformState(next);
+    setPlatformState({ ...next, backgroundSync });
+  };
+
+  const testBackgroundSyncRuntime = async () => {
+    const triggered = await triggerPlantPulseBackgroundSyncForTesting();
+    if (!triggered) {
+      Alert.alert("Background sync test unavailable", "This test trigger only works in a compatible development build.");
+      return;
+    }
+    const stored = await loadPlatformState();
+    setPlatformState(await restorePlatformRuntime(stored));
+    Alert.alert("Background sync test complete", "The native background worker was triggered through the development-only test hook.");
   };
 
   const registerPushRuntime = async () => {
@@ -465,6 +503,7 @@ export default function App() {
           onOidcSignIn={() => void signInOidcRuntime()}
           onDisconnect={() => void disconnectPlatformRuntime()}
           onRegisterPush={() => void registerPushRuntime()}
+          onTestBackgroundSync={() => void testBackgroundSyncRuntime()}
           onResolveConflict={resolveConflictRuntime}
         />
       );
@@ -1640,6 +1679,7 @@ function PlatformScreen({
   onOidcSignIn,
   onDisconnect,
   onRegisterPush,
+  onTestBackgroundSync,
   onResolveConflict
 }: {
   plants: Plant[];
@@ -1656,6 +1696,7 @@ function PlatformScreen({
   onOidcSignIn: () => void;
   onDisconnect: () => void;
   onRegisterPush: () => void;
+  onTestBackgroundSync: () => void;
   onResolveConflict: (conflict: SyncConflict, strategy: "KEEP_LOCAL" | "USE_REMOTE") => void;
 }) {
   const [permission, requestPermission] = useCameraPermissions();
@@ -1711,7 +1752,7 @@ function PlatformScreen({
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
       <DpnHeader
-        eyebrow="DPN PLANTPULSE // PLATFORM V0.9"
+        eyebrow="DPN PLANTPULSE // PLATFORM V0.10"
         title="DPN Platform"
         subtitle="DPN Identity OIDC + PKCE, renewable secure sessions, signed media, synchronized plant records, device trust, and conflict recovery."
       />
@@ -1812,16 +1853,26 @@ function PlatformScreen({
           <Text style={styles.platformMetric}>MEDIA PENDING {pendingImages}</Text>
           <Text style={styles.platformMetric}>NOTIFICATIONS {unread.length}</Text>
           <Text style={styles.platformMetric}>DEVICE {platformState.device ? "ENROLLED" : "—"}</Text>
+          <Text style={styles.platformMetric}>BG {platformState.backgroundSync?.registered ? "REGISTERED" : platformState.backgroundSync?.availability ?? "UNKNOWN"}</Text>
         </View>
         {summary ? (
           <Text style={styles.timelineDate}>
-            LAST SYNC • PUSH {summary.pushed} • PULL {summary.pulled} • MEDIA {summary.uploadedImages} • TAGS {summary.claimedTags} • FAILED {summary.failed}
+            LAST SYNC • RECORDS {summary.pushed}↑/{summary.pulled}↓ • MEDIA {summary.uploadedImages} • TAGS {summary.claimedTags} • PUSH QUEUED {summary.queuedNotifications} • FAILED {summary.failed}
           </Text>
         ) : null}
         {platformState.lastSyncError ? <Text style={styles.warningText}>{platformState.lastSyncError}</Text> : null}
         {platformState.nextRetryAt ? (
           <Text style={styles.timelineDate}>NEXT RETRY {new Date(platformState.nextRetryAt).toLocaleString()}</Text>
         ) : null}
+        {platformState.backgroundSync?.lastRunAt ? (
+          <Text style={styles.timelineDate}>
+            BACKGROUND • {platformState.backgroundSync.lastResult ?? "UNKNOWN"} • {new Date(platformState.backgroundSync.lastRunAt).toLocaleString()}
+          </Text>
+        ) : null}
+        {platformState.backgroundSync?.lastError ? (
+          <Text style={styles.warningText}>BACKGROUND // {platformState.backgroundSync.lastError}</Text>
+        ) : null}
+        {__DEV__ ? <SecondaryButton label="TRIGGER BACKGROUND SYNC TEST" onPress={onTestBackgroundSync} /> : null}
       </Card>
 
       {platformState.conflicts.length > 0 ? (

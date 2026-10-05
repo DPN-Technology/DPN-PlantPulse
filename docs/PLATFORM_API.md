@@ -192,3 +192,20 @@ The mobile runtime now drives the v0.7 service contract directly:
 9. Persist sync summary/retry metadata without persisting the bearer token.
 
 A conflict can be resolved explicitly by rebasing the local record onto the latest remote revision (**KEEP LOCAL**) or by replacing the local record with the captured remote snapshot (**USE REMOTE**).
+
+
+## v0.10 notification queue
+
+Authenticated clients can publish active PlantPulse notification candidates:
+
+```text
+POST /v1/notifications/queue
+```
+
+The request is limited to 20 notifications and each item contains a stable `sourceId`, notification kind, title/body, optional plant ID, and creation time.
+
+The server never accepts another target user in the request. Tenant and user scope come exclusively from the verified DPN identity.
+
+The PostgreSQL outbox fans notifications to enrolled devices with active push tokens and deduplicates by tenant/user/device/source ID.
+
+Push delivery uses ticket + receipt semantics. A successful send ticket is not treated as final delivery until its receipt is checked. Permanent failures are dead-lettered; transient failures retry with bounded exponential backoff; `DeviceNotRegistered` clears the corresponding stored push token.
