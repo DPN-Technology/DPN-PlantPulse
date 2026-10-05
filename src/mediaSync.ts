@@ -1,5 +1,6 @@
 import { Plant, PlantScan } from "./types";
 import { PlatformApiClient } from "./services/platformApi";
+import { touchPlant } from "./syncState";
 
 export interface MediaSyncResult {
   plants: Plant[];
@@ -63,9 +64,11 @@ export async function uploadPendingPlantMedia(
 
   for (const plant of inputPlants) {
     let cloudImageKey = plant.cloudImageKey;
+    let mediaChanged = false;
     if (!cloudImageKey && plant.imageUri && !plant.imageUri.startsWith("cloud://")) {
       try {
         cloudImageKey = await uploadOnce(plant.imageUri);
+        mediaChanged = true;
       } catch {
         failedImages += 1;
       }
@@ -85,6 +88,7 @@ export async function uploadPendingPlantMedia(
           cloudImageKey: scanCloudImageKey,
           imageSyncState: "UPLOADED"
         });
+        mediaChanged = true;
       } catch {
         failedImages += 1;
         scanHistory.push({
@@ -94,11 +98,12 @@ export async function uploadPendingPlantMedia(
       }
     }
 
-    plants.push({
+    const nextPlant: Plant = {
       ...plant,
       ...(cloudImageKey ? { cloudImageKey } : {}),
       scanHistory
-    });
+    };
+    plants.push(mediaChanged ? touchPlant(nextPlant) : nextPlant);
   }
 
   return { plants, uploadedImages, failedImages };
