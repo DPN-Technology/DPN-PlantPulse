@@ -4,6 +4,15 @@ import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 import { getPlatformRuntimeConfig } from "./platformConfig";
 
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldPlaySound: false,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true
+  })
+});
+
 export interface PushRegistrationResult {
   pushToken?: string;
   status: "REGISTERED" | "DENIED" | "UNAVAILABLE" | "PROJECT_ID_MISSING";
@@ -48,10 +57,19 @@ export async function registerPlantPulsePushNotifications(): Promise<PushRegistr
     };
   }
 
-  const pushToken = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
-  return {
-    status: "REGISTERED",
-    pushToken,
-    detail: "Push token registered for PlantPulse device enrollment."
-  };
+  try {
+    const pushToken = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+    return {
+      status: "REGISTERED",
+      pushToken,
+      detail: "Push token registered for PlantPulse device enrollment."
+    };
+  } catch (error) {
+    return {
+      status: "UNAVAILABLE",
+      detail: error instanceof Error
+        ? error.message
+        : "Remote push registration is unavailable in this build."
+    };
+  }
 }
