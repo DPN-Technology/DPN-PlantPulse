@@ -129,3 +129,38 @@ When a scan is attached to an existing plant, species and toxicity fields are re
 ## Provider safety boundary
 
 The mobile client applies a final uncertainty guard after either the local prototype provider or a remote DPN Vision API provider returns. If identification is not `CONFIDENT`, toxicity guidance is replaced with a non-reliance warning before the result reaches the UI.
+
+
+## v0.5 sensor network
+
+```text
+PlantPulse Mobile
+    |
+    +--> Sensor Network
+           |
+           +--> Wi-Fi Gateway Client
+           |      +-- authenticated HTTP transport option
+           |      +-- gateway telemetry envelope
+           |      +-- device metadata
+           |      +-- measured readings
+           |
+           +--> BLE Adapter Contract
+                  +-- scan
+                  +-- connect / disconnect
+                  +-- read telemetry
+                  +-- native implementation required
+
+Telemetry Ingestion
+    |
+    +--> reading-domain validation
+    +--> GOOD / SUSPECT / INVALID quality
+    +--> bounded local history
+    +--> battery / reading alerts
+    +--> device freshness
+    +--> Sensor Network dashboard
+    +--> adaptive-care context
+```
+
+Measured telemetry is kept distinct from image inference. A sensor reading always carries `measured: true`, a unit, observation timestamp, receive timestamp, source device, and quality state. The prediction engine may use valid measured context as additional evidence, but v0.5 does not claim a calibrated agronomic forecast.
+
+Direct BLE is intentionally an interface rather than a fake implementation. The current Expo Go workflow does not include a native BLE module; a development build/native adapter is required before BLE can be marked operational.
