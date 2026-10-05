@@ -50,9 +50,11 @@ async function renewIdentityForRuntime(state: PlatformState): Promise<PlatformSt
       lastSyncError: undefined
     };
   } catch (error) {
+    const identity = expireIdentitySession(state.identity);
+    await persistSecureIdentitySession(identity).catch(() => undefined);
     return {
       ...state,
-      identity: expireIdentitySession(state.identity),
+      identity,
       lastSyncError: error instanceof Error ? error.message : "DPN Identity refresh failed."
     };
   }
