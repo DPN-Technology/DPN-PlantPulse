@@ -1,6 +1,6 @@
 # DPN PlantPulse Platform Service
 
-This directory contains the v0.7 server implementation for the PlantPulse cloud/platform contract.
+This directory contains the v0.10 server implementation for the PlantPulse cloud/platform contract.
 
 ## Runtime
 
@@ -9,6 +9,8 @@ This directory contains the v0.7 server implementation for the PlantPulse cloud/
 - PostgreSQL
 - JWKS/JWT identity verification
 - S3-compatible signed upload grants
+- PostgreSQL notification outbox
+- Expo Push Service ticket/receipt worker
 
 ## Local development
 
@@ -64,3 +66,38 @@ npm run server:test
 ```
 
 GitHub CI runs backend typecheck/build plus integration tests against a real disposable PostgreSQL instance.
+
+
+## Push notification delivery
+
+The platform accepts authenticated, tenant-scoped notification candidates at:
+
+```text
+POST /v1/notifications/queue
+```
+
+The client can only queue notifications for its own authenticated user. The server fans each source notification out to that user's currently enrolled devices with push tokens.
+
+Outbox rows are deduplicated by tenant, user, device and `sourceId`, so repeated foreground or background synchronization does not create duplicate push deliveries for the same active PlantPulse event.
+
+The push worker is explicitly controlled by:
+
+```text
+PUSH_WORKER_ENABLED=false
+PUSH_WORKER_INTERVAL_MS=15000
+PUSH_WORKER_BATCH_SIZE=50
+PUSH_RECEIPT_DELAY_MS=900000
+```
+
+When enabled, the worker:
+
+1. leases due rows using PostgreSQL `FOR UPDATE SKIP LOCKED`;
+2. sends batches to Expo Push Service;
+3. stores push ticket IDs;
+4. checks push receipts later;
+5. marks successful rows delivered;
+6. retries transient failures with exponential backoff;
+7. dead-letters permanent failures;
+8. removes stale push tokens after `DeviceNotRegistered`.
+
+Local Docker keeps the worker disabled unless explicitly enabled.
