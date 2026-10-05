@@ -3,6 +3,7 @@ import test from "node:test";
 import { InMemoryNotificationOutboxRepository } from "../src/memoryNotificationRepository.js";
 import { PlantPulsePushWorker } from "../src/pushWorker.js";
 import { ExpoPushReceipt, ExpoPushTicket, PushProvider } from "../src/pushProvider.js";
+import { PlantPulseObservability } from "../src/observability.js";
 
 class FakeProvider implements PushProvider {
   constructor(
@@ -38,11 +39,13 @@ async function seededOutbox() {
 
 test("push worker moves a notification through ticket and receipt to delivered", async () => {
   const repo = await seededOutbox();
+  const observability = new PlantPulseObservability("0.12.0");
   const worker = new PlantPulsePushWorker({
     repository: repo,
     provider: new FakeProvider({ status: "ok", id: "ticket-1" }),
     receiptDelayMs: 0,
-    intervalMs: 60_000
+    intervalMs: 60_000,
+    observer: observability
   });
 
   await worker.runOnce();
@@ -50,10 +53,13 @@ test("push worker moves a notification through ticket and receipt to delivered",
   assert.equal(row.status, "DELIVERED");
   assert.equal(row.ticketId, "ticket-1");
   assert.equal(row.attemptCount, 1);
+  assert.equal(observability.snapshot().push.attempted, 1);
+  assert.equal(observability.snapshot().push.delivered, 1);
 });
 
 test("push worker retires DeviceNotRegistered tokens", async () => {
   const repo = await seededOutbox();
+  const observability = new PlantPulseObservability("0.12.0");
   const worker = new PlantPulsePushWorker({
     repository: repo,
     provider: new FakeProvider({
@@ -61,13 +67,16 @@ test("push worker retires DeviceNotRegistered tokens", async () => {
       message: "Device is no longer registered",
       details: { error: "DeviceNotRegistered" }
     }),
-    intervalMs: 60_000
+    intervalMs: 60_000,
+    observer: observability
   });
 
   await worker.runOnce();
   const row = repo.snapshot()[0]!;
   assert.equal(row.status, "DEAD");
   assert.match(row.lastError ?? "", /DeviceNotRegistered/);
+  assert.equal(observability.snapshot().push.invalidDevice, 1);
+  assert.equal(observability.snapshot().push.dead, 1);
 
   const queued = await repo.enqueueForUser({
     tenantId: "tenant-a",

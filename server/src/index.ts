@@ -6,8 +6,10 @@ import { PostgresPlatformRepository } from "./postgresRepository.js";
 import { PostgresNotificationOutboxRepository } from "./notificationRepository.js";
 import { ExpoPushProvider } from "./pushProvider.js";
 import { PlantPulsePushWorker } from "./pushWorker.js";
+import { PlantPulseObservability } from "./observability.js";
 
 const config = loadConfig();
+const observability = new PlantPulseObservability("0.12.0");
 const repository = new PostgresPlatformRepository(config.databaseUrl);
 const notificationRepository = new PostgresNotificationOutboxRepository(config.databaseUrl);
 const authVerifier = config.auth.mode === "development"
@@ -32,6 +34,9 @@ const app = await createPlatformApp({
   authVerifier,
   objectStore,
   notificationRepository,
+  observability,
+  metricsEnabled: config.observability.metricsEnabled,
+  controlHealthEnabled: config.observability.controlHealthEnabled,
   logger: true
 });
 
@@ -42,7 +47,8 @@ const pushWorker = config.notifications.enabled
       intervalMs: config.notifications.workerIntervalMs,
       batchSize: config.notifications.batchSize,
       receiptDelayMs: config.notifications.receiptDelayMs,
-      logger: app.log
+      logger: app.log,
+      observer: observability
     })
   : undefined;
 

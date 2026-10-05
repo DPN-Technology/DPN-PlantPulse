@@ -58,10 +58,32 @@ export interface NotificationPreferences {
   updatedAt?: string;
 }
 
+export type OperationReportType = "SYNC" | "BACKGROUND_SYNC";
+export type OperationReportResult = "SUCCESS" | "FAILED" | "SKIPPED";
+
+export interface OperationReportInput {
+  tenantId: string;
+  userId: string;
+  deviceId: string;
+  operation: OperationReportType;
+  result: OperationReportResult;
+  observedAt: string;
+  detail: JsonObject;
+}
+
+export interface OperationHealthSummary {
+  lastSyncAt?: string;
+  lastSyncResult?: OperationReportResult;
+  lastBackgroundSyncAt?: string;
+  lastBackgroundSyncResult?: OperationReportResult;
+  failedDevices: number;
+}
+
 export interface TenantOperationalHealth {
   plantCount: number;
   activeDevices: number;
   revokedDevices: number;
+  operations: OperationHealthSummary;
 }
 
 export interface PlantTagClaimInput {

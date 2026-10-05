@@ -3,6 +3,7 @@ import { PlatformRepository } from "./repository.js";
 import {
   CloudPlantRecord,
   DeviceRegistrationInput,
+  OperationReportInput,
   PlantTagClaimInput,
   PushPlantInput,
   PushPlantResult,
@@ -250,7 +251,7 @@ export class PostgresPlatformRepository implements PlatformRepository {
   }
 
   async getTenantOperationalHealth(tenantId: string, userId: string): Promise<TenantOperationalHealth> {
-    const [plants, devices] = await Promise.all([
+    const [plants, devices, operations] = await Promise.all([
       this.pool.query<{ count: string }>(
         "select count(*)::text as count from plants where tenant_id = $1",
         [tenantId]
@@ -262,14 +263,74 @@ export class PostgresPlatformRepository implements PlatformRepository {
          from client_devices
          where tenant_id = $1 and user_id = $2`,
         [tenantId, userId]
+      ),
+      this.pool.query<{
+        operation: "SYNC" | "BACKGROUND_SYNC";
+        result: "SUCCESS" | "FAILED" | "SKIPPED";
+        observed_at: Date;
+        device_id: string;
+      }>(
+        `select operation, result, observed_at, device_id
+           from client_operation_reports
+          where tenant_id = $1 and user_id = $2
+          order by observed_at desc`,
+        [tenantId, userId]
       )
     ]);
+
+    const latestSync = operations.rows.find((row) => row.operation === "SYNC");
+    const latestBackground = operations.rows.find((row) => row.operation === "BACKGROUND_SYNC");
+    const failedDevices = new Set(
+      operations.rows
+        .filter((row) => row.result === "FAILED")
+        .map((row) => row.device_id)
+    ).size;
 
     return {
       plantCount: Number(plants.rows[0]?.count ?? 0),
       activeDevices: Number(devices.rows[0]?.active ?? 0),
-      revokedDevices: Number(devices.rows[0]?.revoked ?? 0)
+      revokedDevices: Number(devices.rows[0]?.revoked ?? 0),
+      operations: {
+        ...(latestSync ? {
+          lastSyncAt: latestSync.observed_at.toISOString(),
+          lastSyncResult: latestSync.result
+        } : {}),
+        ...(latestBackground ? {
+          lastBackgroundSyncAt: latestBackground.observed_at.toISOString(),
+          lastBackgroundSyncResult: latestBackground.result
+        } : {}),
+        failedDevices
+      }
     };
+  }
+
+  async recordOperationReport(input: OperationReportInput): Promise<void> {
+    const observedAt = new Date(input.observedAt);
+    if (Number.isNaN(observedAt.getTime())) {
+      throw new Error("Operation report observedAt is invalid");
+    }
+
+    await this.pool.query(
+      `insert into client_operation_reports (
+         tenant_id, user_id, device_id, operation, result, detail, observed_at, received_at
+       ) values ($1,$2,$3,$4,$5,$6::jsonb,$7,now())
+       on conflict (tenant_id, user_id, device_id, operation)
+       do update set
+         result = excluded.result,
+         detail = excluded.detail,
+         observed_at = excluded.observed_at,
+         received_at = now()
+       where client_operation_reports.observed_at <= excluded.observed_at`,
+      [
+        input.tenantId,
+        input.userId,
+        input.deviceId,
+        input.operation,
+        input.result,
+        JSON.stringify(input.detail),
+        observedAt
+      ]
+    );
   }
 
   async claimPlantTag(input: PlantTagClaimInput): Promise<void> {

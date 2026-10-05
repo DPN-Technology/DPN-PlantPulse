@@ -1,6 +1,6 @@
 # DPN PlantPulse Platform Service
 
-This directory contains the v0.11 server implementation for the PlantPulse cloud/platform contract.
+This directory contains the v0.12 server implementation for the PlantPulse cloud/platform contract.
 
 ## Runtime
 
@@ -11,6 +11,8 @@ This directory contains the v0.11 server implementation for the PlantPulse cloud
 - S3-compatible signed upload grants
 - PostgreSQL notification outbox
 - Expo Push Service ticket/receipt worker
+- Prometheus-compatible metrics and Node runtime instrumentation
+- DPN Operational Control health feed
 
 ## Local development
 
@@ -110,3 +112,23 @@ Authenticated users can read/update server-side notification preferences, includ
 Device enrollment is ownership-safe. A device ID cannot be silently reassigned to another user inside the same tenant. Revocation is sticky and clears push delivery trust.
 
 Operational health is available through `GET /v1/operations/health`, exposing durable plant/device/outbox counters to the authenticated user. Production metrics, tracing and SLO dashboards remain separate deployment work.
+
+
+## v0.12 observability
+
+The platform exposes:
+
+```text
+GET /metrics
+GET /control/health
+```
+
+`/metrics` uses the official Prometheus Node client and intentionally avoids high-cardinality tenant/user/device labels.
+
+`/control/health` is a non-secret DPN Operational Control-ready health feed. It reports product/integration identity, version, dependency readiness, rolling reliability evidence and SLO evaluations. It does not expose tenant/user/device records.
+
+Every response includes `x-request-id` and `x-dpn-service: DPN-PLANTPULSE` for correlation.
+
+Client foreground/background sync reports are accepted only from active enrolled devices and persisted as latest-per-device operation evidence.
+
+Production should place `/metrics` behind an internal monitoring boundary and export these metrics to the chosen collector/dashboard stack.

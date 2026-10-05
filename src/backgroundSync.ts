@@ -39,7 +39,7 @@ TaskManager.defineTask(PLANTPULSE_BACKGROUND_SYNC_TASK, async () => {
     }
 
     const plants = await loadPlants([]);
-    const result = await synchronizePlatformRuntime(plants, state);
+    const result = await synchronizePlatformRuntime(plants, state, "BACKGROUND");
     await savePlants(result.plants);
 
     const failed = Boolean(result.state.lastSyncError);

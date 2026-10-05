@@ -6,7 +6,7 @@
 <p align="center">
   <img alt="DPN Technology" src="https://img.shields.io/badge/DPN-Technology-070707?style=flat-square&logo=github">
   <img alt="PlantPulse" src="https://img.shields.io/badge/PlantPulse-Biological%20Intelligence-19C864?style=flat-square">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.11.0-19C864?style=flat-square">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.12.0-19C864?style=flat-square">
   <img alt="Security" src="https://img.shields.io/badge/security-CodeQL%20%2B%20CI-E50914?style=flat-square">
   <img alt="Status" src="https://img.shields.io/badge/status-Active%20Development-19C864?style=flat-square">
 </p>
@@ -75,7 +75,9 @@ It is **not** intended to be a branded clone of an existing plant identifier.
 | **Push delivery** | ✅ Implemented service path | PostgreSQL outbox, Expo Push tickets/receipts, retry/backoff, invalid-token retirement |
 | **Notification policy** | ✅ Implemented | server-enforced category controls, quiet hours and IANA timezone |
 | **Device trust** | ✅ Implemented | ownership-safe enrollment, inventory and sticky revocation |
-| **Operational health** | ✅ Implemented durable view | plant/device/outbox counters exposed through authenticated control-plane API |
+| **Operational health** | ✅ Implemented durable view | plant/device/outbox/sync counters exposed through authenticated control-plane API |
+| **Prometheus observability** | ✅ Implemented | bounded-label HTTP latency/error metrics, auth/conflict counters, push/sync metrics, Node runtime metrics |
+| **DPN Operational Control** | ✅ Contract + health feed | Tier B control manifest, CI validation, non-secret ONLINE/DEGRADED reliability feed |
 | **Production botanical AI** | ⛔ Not claimed | production model training/calibration remains future work |
 | **Production DPN cloud deployment** | ⛔ Not claimed | production identity, managed DB/storage, DNS/TLS/gateway remain provisioning work |
 
@@ -263,6 +265,8 @@ The current platform layer includes:
 ```text
 GET  /health
 GET  /ready
+GET  /metrics
+GET  /control/health
 GET  /v1/me
 GET  /v1/plants
 PUT  /v1/plants/:plantId
@@ -273,6 +277,7 @@ DELETE /v1/devices/:deviceId
 GET  /v1/notification-preferences
 PUT  /v1/notification-preferences
 GET  /v1/operations/health
+POST /v1/operations/sync-report
 POST /v1/plant-tags/claim
 POST /v1/notifications/queue
 ```
@@ -285,6 +290,11 @@ The backend currently provides:
 - ownership-safe device registration and sticky revocation;
 - notification policy / quiet-hour enforcement;
 - authenticated operational health counters;
+- durable foreground/background synchronization reports;
+- Prometheus-compatible bounded-label metrics;
+- request correlation via x-request-id;
+- explicit reliability/SLO evaluation;
+- DPN Operational Control Tier B contract + health feed;
 - unique PlantPulse tag claiming;
 - audit events;
 - S3-compatible signed uploads;
@@ -385,8 +395,12 @@ server/
   src/notificationRepository.ts  PostgreSQL push outbox leasing / dedupe
   src/pushProvider.ts            Expo Push Service transport
   src/pushWorker.ts              Ticket / receipt / retry delivery worker
+  src/observability.ts            Prometheus metrics + reliability/SLO engine
   db/schema.sql                 Platform database schema
   test/                         API + PostgreSQL integration coverage
+
+.dpn/
+  operational-control.json       DPN Operational Control Tier B contract
 
 docs/
   ARCHITECTURE.md
@@ -395,6 +409,8 @@ docs/
   ADAPTIVE_CARE.md
   SENSOR_PROTOCOL.md
   PLATFORM_API.md
+  OBSERVABILITY_SLOS.md
+  DPN_OPERATIONAL_CONTROL.md
   ROADMAP.md
 
 .github/
@@ -410,6 +426,7 @@ docs/
 Every major PlantPulse change is expected to clear:
 
 ```text
+DPN Operational Control contract validation
 Mobile TypeScript
 Platform TypeScript
 Platform build
@@ -452,14 +469,16 @@ The next production-readiness priorities are:
 1. **DPN One identity deployment** — provision the authorization server/client registration that the v0.9 OIDC client is ready to use.
 2. **Identity operations** — key rotation, client registration policy, revocation evidence and device trust.
 3. **Background-sync validation** — prove deferrable execution on signed physical-device builds across iOS/Android power states.
-4. **Push productionization** — provision production push credentials and external delivery/SLO dashboards; v0.11 now includes server-side notification preferences and durable operational counters.
+4. **Reliability productionization** — export v0.12 Prometheus metrics to the production monitoring stack, connect dashboards/alerts/traces, and validate SLOs over a real deployment window.
 5. **Media verification** — server-side completion and object validation.
 6. **Production deployment** — managed PostgreSQL, object storage, DNS/TLS/API gateway and observability.
 7. **Production Plant Intelligence** — trained/calibrated botanical models and verified safety knowledge.
 
 Full engineering roadmap: [docs/ROADMAP.md](docs/ROADMAP.md)  
 Production-readiness gate: [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md)  
-DPN Identity / OIDC client: [docs/OIDC_IDENTITY.md](docs/OIDC_IDENTITY.md)
+DPN Identity / OIDC client: [docs/OIDC_IDENTITY.md](docs/OIDC_IDENTITY.md)  
+Observability / SLOs: [docs/OBSERVABILITY_SLOS.md](docs/OBSERVABILITY_SLOS.md)  
+DPN Operational Control: [docs/DPN_OPERATIONAL_CONTROL.md](docs/DPN_OPERATIONAL_CONTROL.md)
 
 ---
 

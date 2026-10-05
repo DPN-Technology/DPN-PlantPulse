@@ -84,6 +84,7 @@ class MediaApi implements PlatformApiClient {
   async listDevices() { throw new Error("unused"); }
   async revokeDevice() { throw new Error("unused"); }
   async getOperationalHealth() { throw new Error("unused"); }
+  async reportSyncOperation() {}
 }
 
 test("pending local plant images are uploaded before cloud serialization", async () => {
@@ -145,7 +146,8 @@ test("sync captures remote snapshot and both conflict strategies are explicit", 
     async updateNotificationPreferences() { throw new Error("unused"); },
     async listDevices() { throw new Error("unused"); },
     async revokeDevice() { throw new Error("unused"); },
-    async getOperationalHealth() { throw new Error("unused"); }
+    async getOperationalHealth() { throw new Error("unused"); },
+    async reportSyncOperation() {}
   };
 
   const result = await synchronizePlants([local], api);

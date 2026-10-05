@@ -1,6 +1,7 @@
 import {
   CloudPlantRecord,
   DeviceRegistrationInput,
+  OperationReportInput,
   PlantTagClaimInput,
   PushPlantInput,
   PushPlantResult,
@@ -17,5 +18,6 @@ export interface PlatformRepository {
   listDevices(tenantId: string, userId: string): Promise<RegisteredDevice[]>;
   revokeDevice(tenantId: string, userId: string, deviceId: string): Promise<void>;
   getTenantOperationalHealth(tenantId: string, userId: string): Promise<TenantOperationalHealth>;
+  recordOperationReport(input: OperationReportInput): Promise<void>;
   claimPlantTag(input: PlantTagClaimInput): Promise<void>;
 }

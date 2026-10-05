@@ -261,10 +261,19 @@ export interface NotificationPreferences {
   updatedAt?: string;
 }
 
+export interface PlatformOperationHealthSummary {
+  lastSyncAt?: string;
+  lastSyncResult?: "SUCCESS" | "FAILED" | "SKIPPED";
+  lastBackgroundSyncAt?: string;
+  lastBackgroundSyncResult?: "SUCCESS" | "FAILED" | "SKIPPED";
+  failedDevices: number;
+}
+
 export interface PlatformOperationalHealth {
   plantCount: number;
   activeDevices: number;
   revokedDevices: number;
+  operations: PlatformOperationHealthSummary;
   push: {
     pending: number;
     retry: number;

@@ -2,6 +2,7 @@ import { PlatformRepository } from "./repository.js";
 import {
   CloudPlantRecord,
   DeviceRegistrationInput,
+  OperationReportInput,
   PlantTagClaimInput,
   PushPlantInput,
   PushPlantResult,
@@ -33,6 +34,7 @@ export class InMemoryPlatformRepository implements PlatformRepository {
   private readonly plants = new Map<string, StoredPlant>();
   private readonly devices = new Map<string, StoredDevice>();
   private readonly tags = new Map<string, StoredTag>();
+  private readonly operationReports = new Map<string, OperationReportInput>();
 
   async ping(): Promise<void> {}
 
@@ -129,11 +131,38 @@ export class InMemoryPlatformRepository implements PlatformRepository {
     const devices = [...this.devices.values()].filter(
       (device) => device.tenantId === tenantId && device.userId === userId
     );
+    const reports = [...this.operationReports.values()]
+      .filter((report) => report.tenantId === tenantId && report.userId === userId)
+      .sort((a, b) => b.observedAt.localeCompare(a.observedAt));
+    const latestSync = reports.find((report) => report.operation === "SYNC");
+    const latestBackground = reports.find((report) => report.operation === "BACKGROUND_SYNC");
+
     return {
       plantCount: [...this.plants.values()].filter((plant) => plant.tenantId === tenantId).length,
       activeDevices: devices.filter((device) => !device.revokedAt).length,
-      revokedDevices: devices.filter((device) => Boolean(device.revokedAt)).length
+      revokedDevices: devices.filter((device) => Boolean(device.revokedAt)).length,
+      operations: {
+        ...(latestSync ? {
+          lastSyncAt: latestSync.observedAt,
+          lastSyncResult: latestSync.result
+        } : {}),
+        ...(latestBackground ? {
+          lastBackgroundSyncAt: latestBackground.observedAt,
+          lastBackgroundSyncResult: latestBackground.result
+        } : {}),
+        failedDevices: new Set(
+          reports.filter((report) => report.result === "FAILED").map((report) => report.deviceId)
+        ).size
+      }
     };
+  }
+
+  async recordOperationReport(input: OperationReportInput): Promise<void> {
+    const key = [input.tenantId, input.userId, input.deviceId, input.operation].join(":");
+    const existing = this.operationReports.get(key);
+    if (!existing || existing.observedAt <= input.observedAt) {
+      this.operationReports.set(key, structuredClone(input));
+    }
   }
 
   async claimPlantTag(input: PlantTagClaimInput): Promise<void> {
