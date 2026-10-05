@@ -120,10 +120,10 @@
 - [x] PlantPulse cloud API service implementation
 - [ ] Production PlantPulse cloud API deployment
 - [ ] Secure credential refresh storage
-- [ ] Actual image/object upload execution
+- [x] Actual image/object upload execution
 - [ ] Background synchronization
 - [ ] Push notification delivery
-- [ ] Conflict-resolution editor
+- [x] Conflict-resolution editor
 - [ ] Multi-device end-to-end integration tests
 
 ## v0.7 — DPN Platform service
@@ -158,6 +158,33 @@
 - [ ] Server-side media completion callback/verification
 - [ ] Conflict-resolution UI
 - [ ] Production observability/SLO dashboards
+
+## v0.8 — Mobile-to-platform connectivity
+- [x] Expo SecureStore native identity-session persistence
+- [x] bearer-token exclusion from AsyncStorage
+- [x] v1 → v2 platform-state migration
+- [x] configurable DPN Platform base URL
+- [x] development-only local platform connector
+- [x] signed local-image upload execution
+- [x] cloud image-key persistence
+- [x] duplicate local-image upload suppression
+- [x] cloud-safe plant serialization
+- [x] live pull-before-push synchronization from the mobile UI
+- [x] foreground/app-resume automatic retry
+- [x] persisted exponential retry metadata
+- [x] remote conflict snapshot capture
+- [x] KEEP LOCAL conflict resolution
+- [x] USE REMOTE conflict resolution
+- [x] stable client-device identity
+- [x] push permission/token enrollment scaffold
+- [x] device registration with optional push token
+- [x] mobile connectivity integration tests in CI
+- [ ] Production DPN Identity/OIDC sign-in UI
+- [ ] renewable refresh-token flow
+- [ ] native background-task synchronization
+- [ ] production remote push worker/provider
+- [ ] server-side media completion verification
+- [ ] production multi-device end-to-end environment
 
 ## Product families
 - PlantPulse Home
