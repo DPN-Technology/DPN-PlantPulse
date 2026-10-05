@@ -94,6 +94,7 @@ export function createPlatformApp(options: PlatformAppOptions) {
   });
 
   app.register(rateLimit, {
+    global: true,
     max: options.rateLimitMax ?? 120,
     timeWindow: options.rateLimitTimeWindow ?? "1 minute",
     hook: "onRequest",
@@ -241,6 +242,14 @@ export function createPlatformApp(options: PlatformAppOptions) {
   });
 
   app.setErrorHandler((error, request, reply) => {
+    if ((error as { statusCode?: number }).statusCode === 429) {
+      return reply.code(429).send({
+        error: "rate_limited",
+        message: "Too many requests",
+        requestId: request.id
+      });
+    }
+
     if (error instanceof RequestValidationError) {
       return reply.code(400).send({
         error: "bad_request",
