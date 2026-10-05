@@ -21,7 +21,10 @@ export const seedPlants: Plant[] = [
       { id: "m2", type: "water", label: "Watered", at: addDaysIso(now, -2) },
       { id: "m3", type: "move", label: "Moved closer to east window", at: addDaysIso(now, -5) }
     ],
-    recommendationFeedback: []
+    recommendationFeedback: [],
+    sensorDevices: [],
+    sensorReadings: [],
+    sensorAlerts: []
   },
   {
     id: "palm-001",
@@ -39,7 +42,10 @@ export const seedPlants: Plant[] = [
       { id: "p1", type: "scan", label: "Health scan — 72/100", at: now.toISOString() },
       { id: "p2", type: "note", label: "Dry leaf tips observed", at: now.toISOString() }
     ],
-    recommendationFeedback: []
+    recommendationFeedback: [],
+    sensorDevices: [],
+    sensorReadings: [],
+    sensorAlerts: []
   },
   {
     id: "basil-001",
@@ -57,6 +63,9 @@ export const seedPlants: Plant[] = [
       { id: "b1", type: "scan", label: "Health scan — 88/100", at: now.toISOString() },
       { id: "b2", type: "water", label: "Watered", at: addDaysIso(now, -1) }
     ],
-    recommendationFeedback: []
+    recommendationFeedback: [],
+    sensorDevices: [],
+    sensorReadings: [],
+    sensorAlerts: []
   }
 ];
