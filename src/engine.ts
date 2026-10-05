@@ -288,6 +288,7 @@ export function analyzePrototypeScan(
     toxicity,
     engine: "local-prototype",
     modelVersion: "prototype-vision-0.3",
-    prototype: true
+    prototype: true,
+    imageSyncState: "LOCAL_ONLY"
   };
 }
