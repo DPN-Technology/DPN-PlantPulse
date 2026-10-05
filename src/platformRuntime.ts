@@ -136,11 +136,12 @@ async function enrollDevice(
   pushToken?: string
 ): Promise<RegisteredClientDevice> {
   const deviceId = await getOrCreateClientDeviceId();
+  const effectivePushToken = pushToken ?? existing?.pushToken;
   return api.registerDevice({
     deviceId,
     name: clientDeviceName(),
     platform: Platform.OS,
-    ...(pushToken ?? existing?.pushToken ? { pushToken: pushToken ?? existing?.pushToken } : {})
+    ...(effectivePushToken ? { pushToken: effectivePushToken } : {})
   });
 }
 
@@ -262,7 +263,14 @@ export function resolvePlatformConflict(
 export function shouldAutoRetryPlatformSync(plants: Plant[], state: PlatformState): boolean {
   if (!isIdentitySessionUsable(state.identity)) return false;
   if (!(state.platformBaseUrl ?? getPlatformRuntimeConfig().defaultBaseUrl)) return false;
-  const pending = plants.some((plant) => ["LOCAL_ONLY", "DIRTY", "ERROR"].includes(plant.sync.state));
+  const pending = plants.some((plant) => {
+    const pendingRecord = ["LOCAL_ONLY", "DIRTY", "ERROR"].includes(plant.sync.state);
+    const pendingPrimaryImage = Boolean(plant.imageUri && !plant.imageUri.startsWith("cloud://") && !plant.cloudImageKey);
+    const pendingScanImage = plant.scanHistory.some(
+      (scan) => Boolean(scan.imageUri && !scan.imageUri.startsWith("cloud://") && !scan.cloudImageKey)
+    );
+    return pendingRecord || pendingPrimaryImage || pendingScanImage;
+  });
   if (!pending) return false;
   if (!state.nextRetryAt) return true;
   return new Date(state.nextRetryAt).getTime() <= Date.now();
