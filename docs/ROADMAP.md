@@ -297,6 +297,34 @@ See [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md) for the evidence gate.
 - [ ] DPN Operational Control signed Integration Fabric heartbeat
 - [ ] production dashboard retention / burn-rate alerts
 
+## v0.13 — Media integrity + lifecycle
+- [x] plant-bound upload reservations
+- [x] required byte-length declaration
+- [x] signed object-storage PUT
+- [x] server-side HEAD verification before cloudImageKey assignment
+- [x] content-type equality validation
+- [x] byte-length equality validation
+- [x] ETag capture when provided by object storage
+- [x] verified-only new cloud media references
+- [x] legacy existing cloud-key compatibility without allowing new unverified keys
+- [x] tracked media attach/detach state
+- [x] attached-media deletion protection
+- [x] explicit media deletion API
+- [x] expired reservation cleanup
+- [x] detached/orphan media cleanup worker
+- [x] cleanup retry/backoff state
+- [x] media lifecycle metrics
+- [x] DPN Platform media health counters
+- [x] DPN Operational Control media telemetry declaration
+- [x] API + real PostgreSQL ownership/lifecycle tests
+- [x] cleanup worker tests
+- [ ] production bucket/KMS policy proof
+- [ ] server-side file signature / MIME sniffing
+- [ ] malware/content scanning where required
+- [ ] cryptographic object checksum verification across supported object stores
+- [ ] EXIF stripping/privacy transform pipeline
+- [ ] deployed cleanup worker evidence and retention audit
+
 ## Product families
 - PlantPulse Home
 - PlantPulse Pro

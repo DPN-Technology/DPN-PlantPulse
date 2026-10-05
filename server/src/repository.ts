@@ -1,6 +1,9 @@
 import {
   CloudPlantRecord,
   DeviceRegistrationInput,
+  MediaCleanupCandidate,
+  MediaReservationInput,
+  MediaUploadRecord,
   OperationReportInput,
   PlantTagClaimInput,
   PushPlantInput,
@@ -19,5 +22,18 @@ export interface PlatformRepository {
   revokeDevice(tenantId: string, userId: string, deviceId: string): Promise<void>;
   getTenantOperationalHealth(tenantId: string, userId: string): Promise<TenantOperationalHealth>;
   recordOperationReport(input: OperationReportInput): Promise<void>;
+  createMediaReservation(input: MediaReservationInput): Promise<MediaUploadRecord>;
+  getMediaUpload(tenantId: string, userId: string, uploadId: string): Promise<MediaUploadRecord>;
+  markMediaVerified(
+    tenantId: string,
+    userId: string,
+    uploadId: string,
+    actualByteLength: number,
+    etag?: string
+  ): Promise<MediaUploadRecord>;
+  markMediaDeleted(tenantId: string, userId: string, uploadId: string): Promise<void>;
+  leaseMediaCleanup(limit: number, orphanBefore: Date): Promise<MediaCleanupCandidate[]>;
+  markMediaCleanupRetry(uploadId: string, error: string, nextAttemptAt: Date): Promise<void>;
+  markMediaCleanupDeleted(uploadId: string): Promise<void>;
   claimPlantTag(input: PlantTagClaimInput): Promise<void>;
 }

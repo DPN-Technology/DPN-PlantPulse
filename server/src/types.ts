@@ -79,11 +79,20 @@ export interface OperationHealthSummary {
   failedDevices: number;
 }
 
+export interface MediaHealthSummary {
+  reserved: number;
+  verified: number;
+  attached: number;
+  deleteRetry: number;
+  deleted: number;
+}
+
 export interface TenantOperationalHealth {
   plantCount: number;
   activeDevices: number;
   revokedDevices: number;
   operations: OperationHealthSummary;
+  media: MediaHealthSummary;
 }
 
 export interface PlantTagClaimInput {
@@ -93,7 +102,17 @@ export interface PlantTagClaimInput {
   plantId: string;
 }
 
+export type MediaKind = "PLANT_PRIMARY" | "SCAN";
+export type MediaStatus =
+  | "RESERVED"
+  | "VERIFIED"
+  | "ATTACHED"
+  | "DELETE_PENDING"
+  | "DELETE_RETRY"
+  | "DELETED";
+
 export interface UploadGrant {
+  uploadId: string;
   objectKey: string;
   uploadUrl: string;
   expiresAt: string;
@@ -101,10 +120,64 @@ export interface UploadGrant {
 }
 
 export interface UploadGrantInput {
+  uploadId: string;
   tenantId: string;
   userId: string;
+  plantId: string;
+  mediaKind: MediaKind;
   contentType: string;
-  byteLength?: number;
+  byteLength: number;
+}
+
+export interface MediaObjectMetadata {
+  contentType?: string;
+  byteLength: number;
+  etag?: string;
+}
+
+export interface MediaUploadRecord {
+  uploadId: string;
+  tenantId: string;
+  userId: string;
+  plantId: string;
+  mediaKind: MediaKind;
+  objectKey: string;
+  contentType: string;
+  expectedByteLength: number;
+  actualByteLength?: number;
+  etag?: string;
+  status: MediaStatus;
+  createdAt: string;
+  expiresAt: string;
+  verifiedAt?: string;
+  attachedAt?: string;
+  detachedAt?: string;
+  deletedAt?: string;
+  cleanupAttemptCount: number;
+  nextCleanupAt: string;
+  lastError?: string;
+}
+
+export interface MediaReservationInput {
+  uploadId: string;
+  tenantId: string;
+  userId: string;
+  plantId: string;
+  mediaKind: MediaKind;
+  objectKey: string;
+  contentType: string;
+  expectedByteLength: number;
+  expiresAt: string;
+}
+
+export interface MediaCleanupCandidate {
+  uploadId: string;
+  objectKey: string;
+  tenantId: string;
+  userId: string;
+  plantId: string;
+  status: MediaStatus;
+  cleanupAttemptCount: number;
 }
 
 export class RevisionConflictError extends Error {

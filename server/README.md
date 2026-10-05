@@ -1,6 +1,6 @@
 # DPN PlantPulse Platform Service
 
-This directory contains the v0.12 server implementation for the PlantPulse cloud/platform contract.
+This directory contains the v0.13 server implementation for the PlantPulse cloud/platform contract.
 
 ## Runtime
 
@@ -132,3 +132,23 @@ Every response includes `x-request-id` and `x-dpn-service: DPN-PLANTPULSE` for c
 Client foreground/background sync reports are accepted only from active enrolled devices and persisted as latest-per-device operation evidence.
 
 Production should place `/metrics` behind an internal monitoring boundary and export these metrics to the chosen collector/dashboard stack.
+
+
+## v0.13 verified media lifecycle
+
+Media uploads use a reservation -> signed PUT -> HEAD verification -> attachment flow. A successful client PUT does not by itself create trusted cloud media.
+
+The service records exact expected byte length, content type, plant binding, object key, verification metadata, attachment state and deletion/cleanup state in PostgreSQL.
+
+Cleanup is disabled by default and controlled by:
+
+```text
+MEDIA_CLEANUP_ENABLED=false
+MEDIA_CLEANUP_INTERVAL_MS=60000
+MEDIA_CLEANUP_BATCH_SIZE=25
+MEDIA_ORPHAN_GRACE_MS=86400000
+```
+
+When enabled, the lifecycle worker leases expired reservations, detached verified media and retry rows, deletes objects idempotently, and records retry state on failure.
+
+The current verification boundary is object metadata integrity, not full file-content inspection. Production can layer file-signature/MIME sniffing, malware scanning, cryptographic checksum policy and EXIF/privacy transforms on top of the same lifecycle ledger.

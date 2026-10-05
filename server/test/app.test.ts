@@ -8,6 +8,7 @@ import { ObjectStore } from "../src/objectStore.js";
 import { PlantPulseObservability } from "../src/observability.js";
 import {
   AuthContext,
+  MediaObjectMetadata,
   RequestValidationError,
   UploadGrant,
   UploadGrantInput
@@ -24,19 +25,34 @@ class HeaderAuthVerifier implements AuthVerifier {
 }
 
 class TestObjectStore implements ObjectStore {
+  private readonly objects = new Map<string, MediaObjectMetadata>();
+
   async createUploadGrant(input: UploadGrantInput): Promise<UploadGrant> {
     if (!["image/jpeg", "image/png", "image/webp"].includes(input.contentType)) {
       throw new RequestValidationError("Unsupported image content type");
     }
-    if (input.byteLength !== undefined && input.byteLength > 15 * 1024 * 1024) {
+    if (input.byteLength > 15 * 1024 * 1024) {
       throw new RequestValidationError("Image size is outside the allowed range");
     }
     return {
-      objectKey: "test/" + input.tenantId + "/image.jpg",
+      uploadId: input.uploadId,
+      objectKey: "test/" + input.tenantId + "/" + input.plantId + "/" + input.uploadId + ".jpg",
       uploadUrl: "https://upload.invalid/object",
       expiresAt: new Date(Date.now() + 900_000).toISOString(),
       headers: { "Content-Type": input.contentType }
     };
+  }
+
+  seedObject(objectKey: string, metadata: MediaObjectMetadata): void {
+    this.objects.set(objectKey, metadata);
+  }
+
+  async inspectObject(objectKey: string): Promise<MediaObjectMetadata | undefined> {
+    return this.objects.get(objectKey);
+  }
+
+  async deleteObject(objectKey: string): Promise<void> {
+    this.objects.delete(objectKey);
   }
 }
 
@@ -65,7 +81,7 @@ test("health is public and reports service version", async () => {
   assert.deepEqual(response.json(), {
     service: "dpn-plantpulse-platform",
     status: "ok",
-    version: "0.12.0"
+    version: "0.13.0"
   });
   await server.close();
 });
@@ -195,7 +211,7 @@ test("media grants validate image type and size", async () => {
     method: "POST",
     url: "/v1/media/uploads",
     headers,
-    payload: { contentType: "image/jpeg", byteLength: 250000 }
+    payload: { plantId: "plant-media", mediaKind: "PLANT_PRIMARY", contentType: "image/jpeg", byteLength: 250000 }
   });
   assert.equal(accepted.statusCode, 201);
   assert.match(accepted.json().objectKey, /^test\/tenant-a\//);
@@ -204,7 +220,7 @@ test("media grants validate image type and size", async () => {
     method: "POST",
     url: "/v1/media/uploads",
     headers,
-    payload: { contentType: "application/pdf", byteLength: 250000 }
+    payload: { plantId: "plant-media", mediaKind: "PLANT_PRIMARY", contentType: "application/pdf", byteLength: 250000 }
   });
   assert.equal(rejectedType.statusCode, 400);
 
@@ -212,9 +228,153 @@ test("media grants validate image type and size", async () => {
     method: "POST",
     url: "/v1/media/uploads",
     headers,
-    payload: { contentType: "image/jpeg", byteLength: 20 * 1024 * 1024 }
+    payload: { plantId: "plant-media", mediaKind: "PLANT_PRIMARY", contentType: "image/jpeg", byteLength: 20 * 1024 * 1024 }
   });
   assert.equal(rejectedSize.statusCode, 400);
+  await server.close();
+});
+
+test("media must be verified for its bound plant before cloud attachment", async () => {
+  const repository = new InMemoryPlatformRepository();
+  const objectStore = new TestObjectStore();
+  const observability = new PlantPulseObservability("0.13.0");
+  const server = await createPlatformApp({
+    repository,
+    objectStore,
+    authVerifier: new HeaderAuthVerifier(),
+    observability
+  });
+  const headers = { authorization: "Bearer tenant-a:user-a" };
+
+  const unverified = await server.inject({
+    method: "PUT",
+    url: "/v1/plants/plant-media",
+    headers,
+    payload: {
+      plant: { ...plant("plant-media", "Unsafe"), cloudImageKey: "foreign/object.jpg" },
+      clientRevision: 1
+    }
+  });
+  assert.equal(unverified.statusCode, 409);
+
+  const grantResponse = await server.inject({
+    method: "POST",
+    url: "/v1/media/uploads",
+    headers,
+    payload: {
+      plantId: "plant-media",
+      mediaKind: "PLANT_PRIMARY",
+      contentType: "image/jpeg",
+      byteLength: 5
+    }
+  });
+  assert.equal(grantResponse.statusCode, 201);
+  const grant = grantResponse.json();
+  objectStore.seedObject(grant.objectKey, {
+    contentType: "image/jpeg",
+    byteLength: 5,
+    etag: "etag-verified"
+  });
+
+  const completed = await server.inject({
+    method: "POST",
+    url: "/v1/media/uploads/" + grant.uploadId + "/complete",
+    headers
+  });
+  assert.equal(completed.statusCode, 200);
+  assert.equal(completed.json().status, "VERIFIED");
+  assert.equal(completed.json().etag, "etag-verified");
+
+  const attached = await server.inject({
+    method: "PUT",
+    url: "/v1/plants/plant-media",
+    headers,
+    payload: {
+      plant: { ...plant("plant-media", "Verified"), cloudImageKey: grant.objectKey },
+      clientRevision: 1
+    }
+  });
+  assert.equal(attached.statusCode, 200);
+
+  const deleteAttached = await server.inject({
+    method: "DELETE",
+    url: "/v1/media/uploads/" + grant.uploadId,
+    headers
+  });
+  assert.equal(deleteAttached.statusCode, 409);
+
+  const detached = await server.inject({
+    method: "PUT",
+    url: "/v1/plants/plant-media",
+    headers,
+    payload: {
+      plant: plant("plant-media", "Detached"),
+      baseRemoteRevision: 1,
+      clientRevision: 2
+    }
+  });
+  assert.equal(detached.statusCode, 200);
+
+  const deleted = await server.inject({
+    method: "DELETE",
+    url: "/v1/media/uploads/" + grant.uploadId,
+    headers
+  });
+  assert.equal(deleted.statusCode, 204);
+
+  const status = await server.inject({
+    method: "GET",
+    url: "/v1/media/uploads/" + grant.uploadId,
+    headers
+  });
+  assert.equal(status.json().status, "DELETED");
+  assert.equal(observability.snapshot().media.verified, 1);
+  assert.equal(observability.snapshot().media.deleted, 1);
+  await server.close();
+});
+
+test("media completion rejects mismatched object metadata and cleans the reservation", async () => {
+  const repository = new InMemoryPlatformRepository();
+  const objectStore = new TestObjectStore();
+  const server = await createPlatformApp({
+    repository,
+    objectStore,
+    authVerifier: new HeaderAuthVerifier()
+  });
+  const headers = { authorization: "Bearer tenant-a:user-a" };
+
+  const grantResponse = await server.inject({
+    method: "POST",
+    url: "/v1/media/uploads",
+    headers,
+    payload: {
+      plantId: "plant-mismatch",
+      mediaKind: "SCAN",
+      contentType: "image/jpeg",
+      byteLength: 10
+    }
+  });
+  const grant = grantResponse.json();
+  objectStore.seedObject(grant.objectKey, {
+    contentType: "image/png",
+    byteLength: 9,
+    etag: "wrong"
+  });
+
+  const completed = await server.inject({
+    method: "POST",
+    url: "/v1/media/uploads/" + grant.uploadId + "/complete",
+    headers
+  });
+  assert.equal(completed.statusCode, 409);
+
+  const status = await server.inject({
+    method: "GET",
+    url: "/v1/media/uploads/" + grant.uploadId,
+    headers
+  });
+  assert.equal(status.json().status, "DELETED");
+  assert.equal(await objectStore.inspectObject(grant.objectKey), undefined);
   await server.close();
 });
 
@@ -492,7 +652,7 @@ test("operations health is authenticated and tenant-user scoped", async () => {
 
 
 test("observability exposes correlated Prometheus metrics and DPN control health", async () => {
-  const observability = new PlantPulseObservability("0.12.0");
+  const observability = new PlantPulseObservability("0.13.0");
   const notificationRepository = new InMemoryNotificationOutboxRepository();
   const server = await createPlatformApp({
     repository: new InMemoryPlatformRepository(),
@@ -520,7 +680,7 @@ test("observability exposes correlated Prometheus metrics and DPN control health
   assert.equal(control.json().productId, "DPN-PLANTPULSE");
   assert.equal(control.json().integrationId, "DPN-PLANTPULSE");
   assert.equal(control.json().status, "ONLINE");
-  assert.equal(control.json().version, "0.12.0");
+  assert.equal(control.json().version, "0.13.0");
   assert.equal(control.json().readiness.database, true);
   assert.equal(control.json().readiness.notificationOutbox, true);
   assert.ok(control.json().reliability.slo.targets.apiP95Milliseconds);
@@ -530,7 +690,7 @@ test("observability exposes correlated Prometheus metrics and DPN control health
 
 test("sync operation reports require an enrolled device and surface in operations health", async () => {
   const repository = new InMemoryPlatformRepository();
-  const observability = new PlantPulseObservability("0.12.0");
+  const observability = new PlantPulseObservability("0.13.0");
   const server = await createPlatformApp({
     repository,
     objectStore: new TestObjectStore(),

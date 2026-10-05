@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import Fastify, { FastifyReply, FastifyRequest } from "fastify";
 import rateLimit from "@fastify/rate-limit";
 import { AuthVerifier } from "./auth.js";
@@ -199,7 +200,7 @@ export async function createPlatformApp(options: PlatformAppOptions) {
   app.get("/health", async () => ({
     service: "dpn-plantpulse-platform",
     status: "ok",
-    version: "0.12.0"
+    version: "0.13.0"
   }));
 
   app.get("/ready", async (_request, reply) => {
@@ -208,7 +209,7 @@ export async function createPlatformApp(options: PlatformAppOptions) {
     const payload = {
       status: ready ? "ready" : "not-ready",
       dependencies,
-      version: "0.12.0"
+      version: "0.13.0"
     };
     return ready ? payload : reply.code(503).send(payload);
   });
@@ -233,7 +234,7 @@ export async function createPlatformApp(options: PlatformAppOptions) {
         productId: "DPN-PLANTPULSE",
         integrationId: "DPN-PLANTPULSE",
         service: "dpn-plantpulse-platform",
-        version: "0.12.0",
+        version: "0.13.0",
         status,
         healthState: reliability.state,
         readiness: dependencies,
@@ -296,17 +297,129 @@ export async function createPlatformApp(options: PlatformAppOptions) {
       throw new RequestValidationError("request body must be an object");
     }
 
+    const plantId = stringField(request.body, "plantId", 160, true)!;
+    const mediaKind = stringField(request.body, "mediaKind", 32, true)!;
+    if (mediaKind !== "PLANT_PRIMARY" && mediaKind !== "SCAN") {
+      throw new RequestValidationError("mediaKind must be PLANT_PRIMARY or SCAN");
+    }
     const contentType = stringField(request.body, "contentType", 100, true)!;
-    const byteLength = integerField(request.body, "byteLength", 1, false);
+    const byteLength = integerField(request.body, "byteLength", 1, true)!;
+    const uploadId = randomUUID();
 
     const grant = await options.objectStore.createUploadGrant({
+      uploadId,
       tenantId: auth.tenantId,
       userId: auth.userId,
+      plantId,
+      mediaKind,
       contentType,
-      ...(byteLength !== undefined ? { byteLength } : {})
+      byteLength
     });
 
+    await options.repository.createMediaReservation({
+      uploadId,
+      tenantId: auth.tenantId,
+      userId: auth.userId,
+      plantId,
+      mediaKind,
+      objectKey: grant.objectKey,
+      contentType,
+      expectedByteLength: byteLength,
+      expiresAt: grant.expiresAt
+    });
+
+    options.observability?.recordMediaOutcome("reserved");
     return reply.code(201).send(grant);
+  });
+
+  app.get("/v1/media/uploads/:uploadId", async (request, reply) => {
+    const auth = await requireAuth(request, reply, options.authVerifier);
+    if (!auth) return;
+    const params = request.params as { uploadId?: string };
+    const uploadId = params.uploadId?.trim();
+    if (!uploadId || uploadId.length > 80) {
+      throw new RequestValidationError("uploadId is invalid");
+    }
+    return options.repository.getMediaUpload(auth.tenantId, auth.userId, uploadId);
+  });
+
+  app.post("/v1/media/uploads/:uploadId/complete", async (request, reply) => {
+    const auth = await requireAuth(request, reply, options.authVerifier);
+    if (!auth) return;
+    const params = request.params as { uploadId?: string };
+    const uploadId = params.uploadId?.trim();
+    if (!uploadId || uploadId.length > 80) {
+      throw new RequestValidationError("uploadId is invalid");
+    }
+
+    const reservation = await options.repository.getMediaUpload(
+      auth.tenantId,
+      auth.userId,
+      uploadId
+    );
+    if (reservation.status === "VERIFIED" || reservation.status === "ATTACHED") {
+      return reservation;
+    }
+    if (reservation.status !== "RESERVED") {
+      throw new ResourceConflictError("Media upload cannot be verified in its current state");
+    }
+    if (new Date(reservation.expiresAt).getTime() <= Date.now()) {
+      options.observability?.recordMediaOutcome("verification_failed");
+      throw new ResourceConflictError("Media upload grant has expired");
+    }
+
+    const metadata = await options.objectStore.inspectObject(reservation.objectKey);
+    const invalid = !metadata ||
+      metadata.byteLength !== reservation.expectedByteLength ||
+      metadata.byteLength <= 0 ||
+      metadata.contentType !== reservation.contentType;
+
+    if (invalid) {
+      options.observability?.recordMediaOutcome("verification_failed");
+      try {
+        await options.objectStore.deleteObject(reservation.objectKey);
+        await options.repository.markMediaDeleted(auth.tenantId, auth.userId, uploadId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Media verification cleanup failed";
+        await options.repository.markMediaCleanupRetry(
+          uploadId,
+          message,
+          new Date(Date.now() + 5 * 60_000)
+        );
+      }
+      throw new ResourceConflictError("Uploaded object metadata does not match the media reservation");
+    }
+
+    const verified = await options.repository.markMediaVerified(
+      auth.tenantId,
+      auth.userId,
+      uploadId,
+      metadata.byteLength,
+      metadata.etag
+    );
+    options.observability?.recordMediaOutcome("verified");
+    return verified;
+  });
+
+  app.delete("/v1/media/uploads/:uploadId", async (request, reply) => {
+    const auth = await requireAuth(request, reply, options.authVerifier);
+    if (!auth) return;
+    const params = request.params as { uploadId?: string };
+    const uploadId = params.uploadId?.trim();
+    if (!uploadId || uploadId.length > 80) {
+      throw new RequestValidationError("uploadId is invalid");
+    }
+
+    const media = await options.repository.getMediaUpload(auth.tenantId, auth.userId, uploadId);
+    if (media.status === "ATTACHED") {
+      throw new ResourceConflictError("Detach media from the plant before deletion");
+    }
+    if (media.status !== "DELETED") {
+      await options.objectStore.deleteObject(media.objectKey);
+      await options.repository.markMediaDeleted(auth.tenantId, auth.userId, uploadId);
+      options.observability?.recordMediaOutcome("deleted");
+    }
+    return reply.code(204).send();
   });
 
   app.get("/v1/devices", async (request, reply) => {

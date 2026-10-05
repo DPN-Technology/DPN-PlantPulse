@@ -11,7 +11,9 @@ DPN PlantPulse handles user-created plant records, photographs, identity session
 - Plant records, devices, notification policy and operation reports are tenant/user scoped.
 - Device IDs cannot be silently taken over by another user; revoked device trust is sticky.
 - Remote plant writes use optimistic concurrency and reject stale revisions instead of silently overwriting.
-- Signed media uploads are constrained by content type, size and short-lived grants. Production object completion verification, KMS/bucket policy and deletion lifecycle remain deployment work.
+- Signed media uploads are plant-bound and byte-length-bound; cloud keys are not trusted until the server verifies object existence, content type and exact byte length through object storage.
+- New plant cloud-media references must map to verified tracked media for that tenant/plant; attached tracked media cannot be deleted out from under a plant.
+- Expired/detached media can be cleaned by a retrying lifecycle worker. Production bucket/KMS policy, content scanning, cryptographic checksum policy and EXIF/privacy transformation remain deployment hardening work.
 - Push delivery uses a durable outbox, bounded retries, ticket/receipt verification and invalid-token retirement.
 - Notification policy is enforced server-side, including category suppression and quiet hours.
 - Prometheus labels deliberately exclude tenant/user/device IDs to avoid high-cardinality data leakage.

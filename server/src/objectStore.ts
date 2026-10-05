@@ -1,10 +1,21 @@
-import { randomUUID } from "node:crypto";
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  DeleteObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { RequestValidationError, UploadGrant, UploadGrantInput } from "./types.js";
+import {
+  MediaObjectMetadata,
+  RequestValidationError,
+  UploadGrant,
+  UploadGrantInput
+} from "./types.js";
 
 export interface ObjectStore {
   createUploadGrant(input: UploadGrantInput): Promise<UploadGrant>;
+  inspectObject(objectKey: string): Promise<MediaObjectMetadata | undefined>;
+  deleteObject(objectKey: string): Promise<void>;
 }
 
 export interface S3ObjectStoreOptions {
@@ -26,6 +37,14 @@ function safeSegment(value: string): string {
   return value.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 120);
 }
 
+function isMissingObject(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { name?: string; $metadata?: { httpStatusCode?: number } };
+  return candidate.name === "NotFound" ||
+    candidate.name === "NoSuchKey" ||
+    candidate.$metadata?.httpStatusCode === 404;
+}
+
 export class S3ObjectStore implements ObjectStore {
   private readonly client: S3Client;
   private readonly bucket: string;
@@ -45,12 +64,11 @@ export class S3ObjectStore implements ObjectStore {
 
   async createUploadGrant(input: UploadGrantInput): Promise<UploadGrant> {
     const extension = EXTENSIONS[input.contentType];
-    if (!extension) {
-      throw new RequestValidationError("Unsupported image content type");
-    }
+    if (!extension) throw new RequestValidationError("Unsupported image content type");
     if (
-      input.byteLength !== undefined &&
-      (!Number.isInteger(input.byteLength) || input.byteLength <= 0 || input.byteLength > this.maxUploadBytes)
+      !Number.isInteger(input.byteLength) ||
+      input.byteLength <= 0 ||
+      input.byteLength > this.maxUploadBytes
     ) {
       throw new RequestValidationError("Image size is outside the allowed range");
     }
@@ -60,15 +78,17 @@ export class S3ObjectStore implements ObjectStore {
       safeSegment(input.tenantId),
       "users",
       safeSegment(input.userId),
-      "plant-images",
-      new Date().toISOString().slice(0, 10),
-      randomUUID() + "." + extension
+      "plants",
+      safeSegment(input.plantId),
+      "media",
+      input.uploadId + "." + extension
     ].join("/");
 
     const command = new PutObjectCommand({
       Bucket: this.bucket,
       Key: objectKey,
-      ContentType: input.contentType
+      ContentType: input.contentType,
+      ContentLength: input.byteLength
     });
 
     const uploadUrl = await getSignedUrl(this.client, command, {
@@ -77,23 +97,68 @@ export class S3ObjectStore implements ObjectStore {
     const expiresAt = new Date(Date.now() + this.uploadTtlSeconds * 1000).toISOString();
 
     return {
+      uploadId: input.uploadId,
       objectKey,
       uploadUrl,
       expiresAt,
-      headers: {
-        "Content-Type": input.contentType
-      }
+      headers: { "Content-Type": input.contentType }
     };
+  }
+
+  async inspectObject(objectKey: string): Promise<MediaObjectMetadata | undefined> {
+    try {
+      const response = await this.client.send(new HeadObjectCommand({
+        Bucket: this.bucket,
+        Key: objectKey
+      }));
+      return {
+        byteLength: response.ContentLength ?? 0,
+        ...(response.ContentType ? { contentType: response.ContentType } : {}),
+        ...(response.ETag ? { etag: response.ETag.replace(/^"|"$/g, "") } : {})
+      };
+    } catch (error) {
+      if (isMissingObject(error)) return undefined;
+      throw error;
+    }
+  }
+
+  async deleteObject(objectKey: string): Promise<void> {
+    await this.client.send(new DeleteObjectCommand({
+      Bucket: this.bucket,
+      Key: objectKey
+    }));
   }
 }
 
 export class FixedObjectStore implements ObjectStore {
+  private readonly objects = new Map<string, MediaObjectMetadata>();
+
   async createUploadGrant(input: UploadGrantInput): Promise<UploadGrant> {
+    const extension = EXTENSIONS[input.contentType] ?? "jpg";
+    const objectKey = [
+      "test",
+      safeSegment(input.tenantId),
+      safeSegment(input.plantId),
+      input.uploadId + "." + extension
+    ].join("/");
     return {
-      objectKey: "test/" + safeSegment(input.tenantId) + "/" + randomUUID() + ".jpg",
+      uploadId: input.uploadId,
+      objectKey,
       uploadUrl: "https://upload.invalid/test",
       expiresAt: new Date(Date.now() + 900_000).toISOString(),
       headers: { "Content-Type": input.contentType }
     };
+  }
+
+  seedObject(objectKey: string, metadata: MediaObjectMetadata): void {
+    this.objects.set(objectKey, metadata);
+  }
+
+  async inspectObject(objectKey: string): Promise<MediaObjectMetadata | undefined> {
+    return this.objects.get(objectKey);
+  }
+
+  async deleteObject(objectKey: string): Promise<void> {
+    this.objects.delete(objectKey);
   }
 }

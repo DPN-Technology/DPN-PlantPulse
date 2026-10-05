@@ -1,6 +1,6 @@
 # DPN PlantPulse ↔ DPN Operational Control
 
-PlantPulse v0.12 registers itself as a first-class DPN Operational Control system using the versioned DPN Control Contract.
+PlantPulse v0.12+ registers itself as a first-class DPN Operational Control system using the versioned DPN Control Contract.
 
 ## Repository contract
 
@@ -17,7 +17,7 @@ PlantPulse declares:
 - runtime mode: persistent-service
 - integration ID: DPN-PLANTPULSE
 - capabilities: health_check, collect_diagnostics
-- telemetry: health, version, readiness, HTTP, authentication, synchronization, background sync, push delivery and revision conflicts
+- telemetry: health, version, readiness, HTTP, authentication, synchronization, background sync, push delivery, revision conflicts, media integrity and media lifecycle
 
 The contract contains no runtime credential, Integration Fabric secret, GitHub token or signing key.
 
@@ -48,6 +48,6 @@ It intentionally excludes tenant/user/plant/device identifiers.
 
 Operational Control's Integration Fabric uses separate runtime identities and signed delivery credentials. Those credentials are deployment state and must never be placed in the repository contract.
 
-v0.12 is **Operational Control-ready**, not falsely represented as already enrolled in a live DPN Control Server.
+v0.13 is **Operational Control-ready**, not falsely represented as already enrolled in a live DPN Control Server.
 
 A future production integration can add a non-blocking signed heartbeat/event adapter using the existing DPN Integration Fabric without changing the repository identity contract.

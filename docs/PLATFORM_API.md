@@ -296,3 +296,33 @@ Only the latest report for each tenant/user/device/operation is retained in `cli
 It intentionally contains no tenant, user, plant or device identifiers.
 
 The repository also declares `.dpn/operational-control.json` using the DPN Operational Control schema v1.0.
+
+
+## v0.13 verified media lifecycle
+
+```text
+POST   /v1/media/uploads
+GET    /v1/media/uploads/{uploadId}
+POST   /v1/media/uploads/{uploadId}/complete
+DELETE /v1/media/uploads/{uploadId}
+```
+
+The media path is now a reservation/verification lifecycle rather than a one-step trust of the signed PUT.
+
+1. The authenticated client requests a reservation bound to a plant, media kind, content type and exact byte length.
+2. The platform creates a unique upload ID and signed object-storage PUT target.
+3. The client uploads the bytes.
+4. The client calls the completion endpoint.
+5. The server performs an object HEAD request and verifies that the object exists, its content type matches, and its actual byte length equals the reservation.
+6. Only after successful verification does the client assign the returned cloud object key to the plant record.
+7. New cloud media references are accepted on plant writes only when a verified tracked object is bound to that tenant and plant.
+8. Tracked media removed from the plant becomes detached and cleanup-eligible.
+9. Attached media cannot be explicitly deleted until it is detached.
+
+Existing cloud keys already present on a pre-v0.13 saved plant are grandfathered when preserved during later edits. A client cannot use that compatibility rule to introduce a new unverified key.
+
+### Integrity boundary
+
+PlantPulse captures the object-store ETag when available, but does not claim that every S3-compatible ETag is a cryptographic content hash. v0.13 proves object existence plus declared content-type/byte-length equality and durable ownership/lifecycle state.
+
+Production hardening still includes cryptographic checksum policy where supported, MIME/file-signature inspection, malware/content scanning where appropriate, bucket/KMS controls, and an EXIF/privacy transformation pipeline.

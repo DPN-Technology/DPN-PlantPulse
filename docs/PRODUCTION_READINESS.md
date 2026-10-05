@@ -12,7 +12,7 @@
 | Secure native session storage | Implemented with renewable OIDC credentials | production provider revocation/rotation evidence |
 | Platform API | Implemented | production DNS/TLS/API gateway deployment |
 | PostgreSQL repository | Implemented | managed production database, backups, recovery proof |
-| Object-storage signing | Implemented | production bucket policy, encryption/KMS, lifecycle and completion verification |
+| Media integrity/lifecycle | Signed upload + server HEAD verification + ownership binding + deletion/orphan lifecycle implemented | production bucket/KMS policy, content scanning, EXIF/privacy transform, deployed cleanup/retention proof |
 | Offline-first synchronization | Native deferrable background task implemented | signed physical-device execution proof + multi-device end-to-end tests |
 | Conflict handling | Implemented | production multi-device validation |
 | Device trust | Ownership-safe enrollment + inventory + sticky revocation implemented | production administrative recovery/reactivation policy + device-bound proof |
@@ -60,10 +60,11 @@ The signed upload path already exists. Production media requires:
 
 - encrypted bucket policy;
 - short-lived scoped upload grants;
-- server-side completion verification;
+- [x] server-side completion verification by object HEAD metadata;
 - MIME/type validation beyond client declaration where practical;
 - object ownership tied to tenant/user/plant;
-- retention/deletion lifecycle;
+- [x] tracked deletion/orphan lifecycle in the service;
+- [ ] production retention policy and deployed cleanup evidence;
 - orphaned upload cleanup;
 - image privacy and EXIF minimization policy.
 

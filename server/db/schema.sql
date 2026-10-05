@@ -138,3 +138,32 @@ create table if not exists client_operation_reports (
 
 create index if not exists client_operation_reports_recent_idx
   on client_operation_reports (tenant_id, user_id, operation, observed_at desc);
+
+
+-- v0.13 media integrity/lifecycle metadata.
+alter table media_uploads
+  add column if not exists plant_id text,
+  add column if not exists media_kind text,
+  add column if not exists actual_byte_length bigint,
+  add column if not exists etag text,
+  add column if not exists verified_at timestamptz,
+  add column if not exists attached_at timestamptz,
+  add column if not exists detached_at timestamptz,
+  add column if not exists deleted_at timestamptz,
+  add column if not exists cleanup_attempt_count integer not null default 0,
+  add column if not exists next_cleanup_at timestamptz not null default now(),
+  add column if not exists last_error text;
+
+update media_uploads
+   set status = 'RESERVED'
+ where status = 'GRANTED';
+
+alter table media_uploads
+  alter column status set default 'RESERVED';
+
+create index if not exists media_uploads_cleanup_idx
+  on media_uploads (status, next_cleanup_at, expires_at)
+  where status in ('RESERVED', 'VERIFIED', 'DELETE_RETRY');
+
+create index if not exists media_uploads_plant_idx
+  on media_uploads (tenant_id, plant_id, status);

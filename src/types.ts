@@ -274,6 +274,13 @@ export interface PlatformOperationalHealth {
   activeDevices: number;
   revokedDevices: number;
   operations: PlatformOperationHealthSummary;
+  media: {
+    reserved: number;
+    verified: number;
+    attached: number;
+    deleteRetry: number;
+    deleted: number;
+  };
   push: {
     pending: number;
     retry: number;

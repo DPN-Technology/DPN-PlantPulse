@@ -18,6 +18,8 @@ function contentTypeFromUri(uri: string): string {
 }
 
 async function uploadLocalImage(
+  plantId: string,
+  mediaKind: "PLANT_PRIMARY" | "SCAN",
   uri: string,
   api: PlatformApiClient,
   fetcher: FetchLike
@@ -26,7 +28,8 @@ async function uploadLocalImage(
   if (!local.ok) throw new Error("Could not read local PlantPulse image");
   const blob = await local.blob();
   const contentType = blob.type || contentTypeFromUri(uri);
-  const grant = await api.requestImageUpload(contentType, blob.size || undefined);
+  if (!blob.size) throw new Error("PlantPulse image has no readable byte length");
+  const grant = await api.requestImageUpload(plantId, mediaKind, contentType, blob.size);
 
   const uploaded = await fetcher(grant.uploadUrl, {
     method: "PUT",
@@ -40,7 +43,12 @@ async function uploadLocalImage(
   if (!uploaded.ok) {
     throw new Error("PlantPulse image upload failed with HTTP " + uploaded.status);
   }
-  return grant.objectKey;
+
+  const verified = await api.completeImageUpload(grant.uploadId);
+  if (verified.status !== "VERIFIED" && verified.status !== "ATTACHED") {
+    throw new Error("PlantPulse image was not verified by the platform");
+  }
+  return verified.objectKey;
 }
 
 export async function uploadPendingPlantMedia(
@@ -51,13 +59,18 @@ export async function uploadPendingPlantMedia(
   let uploadedImages = 0;
   let failedImages = 0;
   const plants: Plant[] = [];
-  const uploadedByUri = new Map<string, string>();
+  const uploadedByPlantUri = new Map<string, string>();
 
-  const uploadOnce = async (uri: string): Promise<string> => {
-    const existing = uploadedByUri.get(uri);
+  const uploadOnce = async (
+    plantId: string,
+    mediaKind: "PLANT_PRIMARY" | "SCAN",
+    uri: string
+  ): Promise<string> => {
+    const cacheKey = plantId + "\u0000" + uri;
+    const existing = uploadedByPlantUri.get(cacheKey);
     if (existing) return existing;
-    const key = await uploadLocalImage(uri, api, fetcher);
-    uploadedByUri.set(uri, key);
+    const key = await uploadLocalImage(plantId, mediaKind, uri, api, fetcher);
+    uploadedByPlantUri.set(cacheKey, key);
     uploadedImages += 1;
     return key;
   };
@@ -67,7 +80,7 @@ export async function uploadPendingPlantMedia(
     let mediaChanged = false;
     if (!cloudImageKey && plant.imageUri && !plant.imageUri.startsWith("cloud://")) {
       try {
-        cloudImageKey = await uploadOnce(plant.imageUri);
+        cloudImageKey = await uploadOnce(plant.id, "PLANT_PRIMARY", plant.imageUri);
         mediaChanged = true;
       } catch {
         failedImages += 1;
@@ -82,7 +95,7 @@ export async function uploadPendingPlantMedia(
       }
 
       try {
-        const scanCloudImageKey = await uploadOnce(scan.imageUri);
+        const scanCloudImageKey = await uploadOnce(plant.id, "SCAN", scan.imageUri);
         scanHistory.push({
           ...scan,
           cloudImageKey: scanCloudImageKey,

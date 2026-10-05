@@ -32,7 +32,9 @@
       "synchronization",
       "background_sync",
       "push_delivery",
-      "revision_conflicts"
+      "revision_conflicts",
+      "media_integrity",
+      "media_lifecycle"
     ]
   },
   "release": {

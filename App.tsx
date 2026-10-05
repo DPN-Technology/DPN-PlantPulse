@@ -1834,7 +1834,7 @@ function PlatformScreen({
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
       <DpnHeader
-        eyebrow="DPN PLANTPULSE // PLATFORM V0.11"
+        eyebrow="DPN PLANTPULSE // PLATFORM V0.13"
         title="DPN Platform"
         subtitle="DPN Identity, synchronized plant records, notification policy, trusted-device control, background operations, and observable delivery health."
       />
@@ -2068,6 +2068,12 @@ function PlatformScreen({
                   <Text style={styles.platformMetric}>TICKETED {platformState.operationalHealth.push.ticketed}</Text>
                   <Text style={styles.platformMetric}>DELIVERED {platformState.operationalHealth.push.delivered}</Text>
                   <Text style={styles.platformMetric}>DEAD {platformState.operationalHealth.push.dead}</Text>
+                </View>
+                <View style={styles.platformMetricRow}>
+                  <Text style={styles.platformMetric}>MEDIA VERIFIED {platformState.operationalHealth.media.verified}</Text>
+                  <Text style={styles.platformMetric}>ATTACHED {platformState.operationalHealth.media.attached}</Text>
+                  <Text style={styles.platformMetric}>RESERVED {platformState.operationalHealth.media.reserved}</Text>
+                  <Text style={styles.platformMetric}>DELETE RETRY {platformState.operationalHealth.media.deleteRetry}</Text>
                 </View>
                 <View style={styles.platformMetricRow}>
                   <Text style={styles.platformMetric}>SYNC {platformState.operationalHealth.operations.lastSyncResult ?? "—"}</Text>
