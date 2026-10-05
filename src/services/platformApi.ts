@@ -23,11 +23,25 @@ export interface PushPlantResponse {
   updatedAt: string;
 }
 
+export type MediaUploadKind = "PLANT_PRIMARY" | "SCAN";
+
 export interface ImageUploadGrant {
+  uploadId: string;
   objectKey: string;
   uploadUrl: string;
   expiresAt: string;
   headers?: Record<string, string>;
+}
+
+export interface VerifiedMediaUpload {
+  uploadId: string;
+  objectKey: string;
+  contentType: string;
+  expectedByteLength: number;
+  actualByteLength?: number;
+  etag?: string;
+  status: "VERIFIED" | "ATTACHED";
+  verifiedAt?: string;
 }
 
 export interface RegisterDeviceRequest {
@@ -58,7 +72,13 @@ export interface SyncOperationReport {
 export interface PlatformApiClient {
   pullPlants(): Promise<RemotePlantRecord[]>;
   pushPlant(request: PushPlantRequest): Promise<PushPlantResponse>;
-  requestImageUpload(contentType: string, byteLength?: number): Promise<ImageUploadGrant>;
+  requestImageUpload(
+    plantId: string,
+    mediaKind: MediaUploadKind,
+    contentType: string,
+    byteLength: number
+  ): Promise<ImageUploadGrant>;
+  completeImageUpload(uploadId: string): Promise<VerifiedMediaUpload>;
   registerDevice(request: RegisterDeviceRequest): Promise<RegisteredClientDevice>;
   claimPlantTag(request: PlantTagClaimRequest): Promise<void>;
   queueNotifications(notifications: PlatformNotification[]): Promise<number>;
@@ -146,13 +166,27 @@ export class DpnPlatformApiClient implements PlatformApiClient {
     return (await response.json()) as PushPlantResponse;
   }
 
-  async requestImageUpload(contentType: string, byteLength?: number): Promise<ImageUploadGrant> {
+  async requestImageUpload(
+    plantId: string,
+    mediaKind: MediaUploadKind,
+    contentType: string,
+    byteLength: number
+  ): Promise<ImageUploadGrant> {
     const response = await this.request("/v1/media/uploads", {
       method: "POST",
-      body: JSON.stringify({ contentType, byteLength })
+      body: JSON.stringify({ plantId, mediaKind, contentType, byteLength })
     });
     if (!response.ok) throw new Error("Image upload grant failed with HTTP " + response.status);
     return (await response.json()) as ImageUploadGrant;
+  }
+
+  async completeImageUpload(uploadId: string): Promise<VerifiedMediaUpload> {
+    const response = await this.request(
+      "/v1/media/uploads/" + encodeURIComponent(uploadId) + "/complete",
+      { method: "POST" }
+    );
+    if (!response.ok) throw new Error("Image verification failed with HTTP " + response.status);
+    return (await response.json()) as VerifiedMediaUpload;
   }
 
   async registerDevice(request: RegisterDeviceRequest): Promise<RegisteredClientDevice> {
@@ -242,7 +276,13 @@ export class UnconfiguredPlatformApiClient implements PlatformApiClient {
 
   async pullPlants(): Promise<RemotePlantRecord[]> { return this.fail(); }
   async pushPlant(_request: PushPlantRequest): Promise<PushPlantResponse> { return this.fail(); }
-  async requestImageUpload(_contentType: string, _byteLength?: number): Promise<ImageUploadGrant> { return this.fail(); }
+  async requestImageUpload(
+    _plantId: string,
+    _mediaKind: MediaUploadKind,
+    _contentType: string,
+    _byteLength: number
+  ): Promise<ImageUploadGrant> { return this.fail(); }
+  async completeImageUpload(_uploadId: string): Promise<VerifiedMediaUpload> { return this.fail(); }
   async registerDevice(_request: RegisterDeviceRequest): Promise<RegisteredClientDevice> { return this.fail(); }
   async claimPlantTag(_request: PlantTagClaimRequest): Promise<void> { return this.fail(); }
   async queueNotifications(_notifications: PlatformNotification[]): Promise<number> { return this.fail(); }
