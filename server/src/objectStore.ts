@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { UploadGrant, UploadGrantInput } from "./types.js";
+import { RequestValidationError, UploadGrant, UploadGrantInput } from "./types.js";
 
 export interface ObjectStore {
   createUploadGrant(input: UploadGrantInput): Promise<UploadGrant>;
@@ -46,13 +46,13 @@ export class S3ObjectStore implements ObjectStore {
   async createUploadGrant(input: UploadGrantInput): Promise<UploadGrant> {
     const extension = EXTENSIONS[input.contentType];
     if (!extension) {
-      throw new Error("Unsupported image content type");
+      throw new RequestValidationError("Unsupported image content type");
     }
     if (
       input.byteLength !== undefined &&
       (!Number.isInteger(input.byteLength) || input.byteLength <= 0 || input.byteLength > this.maxUploadBytes)
     ) {
-      throw new Error("Image size is outside the allowed range");
+      throw new RequestValidationError("Image size is outside the allowed range");
     }
 
     const objectKey = [
