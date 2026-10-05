@@ -88,3 +88,19 @@ create table if not exists notification_outbox (
 create index if not exists notification_outbox_pending_idx
   on notification_outbox (status, created_at)
   where status = 'PENDING';
+
+
+alter table notification_outbox
+  add column if not exists source_id text,
+  add column if not exists attempt_count integer not null default 0,
+  add column if not exists next_attempt_at timestamptz not null default now(),
+  add column if not exists push_ticket_id text,
+  add column if not exists receipt_checked_at timestamptz;
+
+create unique index if not exists notification_outbox_source_device_uidx
+  on notification_outbox (tenant_id, user_id, device_id, source_id)
+  where source_id is not null;
+
+create index if not exists notification_outbox_due_idx
+  on notification_outbox (status, next_attempt_at, created_at)
+  where status in ('PENDING', 'RETRY', 'SENDING', 'TICKETED');
