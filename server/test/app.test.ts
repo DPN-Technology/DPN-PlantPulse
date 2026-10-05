@@ -247,3 +247,25 @@ test("device registration is tenant-scoped and idempotent", async () => {
   assert.equal(second.json().registeredAt, first.json().registeredAt);
   await server.close();
 });
+
+
+test("authenticated routes are rate limited", async () => {
+  const server = createPlatformApp({
+    repository: new InMemoryPlatformRepository(),
+    objectStore: new TestObjectStore(),
+    authVerifier: new HeaderAuthVerifier(),
+    rateLimitMax: 2,
+    rateLimitTimeWindow: "1 minute"
+  });
+  const headers = { authorization: "Bearer tenant-a:user-a" };
+
+  const first = await server.inject({ method: "GET", url: "/v1/plants", headers });
+  const second = await server.inject({ method: "GET", url: "/v1/plants", headers });
+  const third = await server.inject({ method: "GET", url: "/v1/plants", headers });
+
+  assert.equal(first.statusCode, 200);
+  assert.equal(second.statusCode, 200);
+  assert.equal(third.statusCode, 429);
+  assert.ok(third.headers["retry-after"]);
+  await server.close();
+});
