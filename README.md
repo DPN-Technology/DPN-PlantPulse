@@ -1,122 +1,303 @@
-# DPN PlantPulse
+<!-- DPN-REPO-HERO:START -->
+<p align="center">
+  <img src=".github/readme-hero.svg" alt="DPN PlantPulse — AI Plant Intelligence & Health Monitoring" width="100%">
+</p>
+
+<p align="center">
+  <img alt="DPN Technology" src="https://img.shields.io/badge/DPN-Technology-070707?style=flat-square&logo=github">
+  <img alt="PlantPulse" src="https://img.shields.io/badge/PlantPulse-Biological%20Intelligence-19C864?style=flat-square">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.8.0-19C864?style=flat-square">
+  <img alt="Security" src="https://img.shields.io/badge/security-CodeQL%20%2B%20CI-E50914?style=flat-square">
+  <img alt="Status" src="https://img.shields.io/badge/status-Active%20Development-19C864?style=flat-square">
+</p>
+<!-- DPN-REPO-HERO:END -->
+
+<!-- DPN-LIVE-STATUS:START -->
+<p align="center">
+  <img alt="PlantPulse CI" src="https://github.com/DPN-Technology/DPN-PlantPulse/actions/workflows/ci.yml/badge.svg">
+  <img alt="CodeQL" src="https://github.com/DPN-Technology/DPN-PlantPulse/actions/workflows/codeql.yml/badge.svg">
+  <img alt="Latest release" src="https://img.shields.io/github/v/release/DPN-Technology/DPN-PlantPulse?display_name=tag&sort=semver&style=flat-square&label=release">
+  <img alt="Last commit" src="https://img.shields.io/github/last-commit/DPN-Technology/DPN-PlantPulse?style=flat-square&label=last%20commit">
+  <img alt="Open issues" src="https://img.shields.io/github/issues/DPN-Technology/DPN-PlantPulse?style=flat-square">
+  <img alt="Repository size" src="https://img.shields.io/github/repo-size/DPN-Technology/DPN-PlantPulse?style=flat-square">
+</p>
+<!-- DPN-LIVE-STATUS:END -->
+
+<!-- DPN-REPO-SHOWCASE:START -->
+<p align="center">
+  <img src=".github/repo-showcase.svg" alt="DPN PlantPulse biological intelligence mesh" width="100%">
+</p>
+
+<p align="center">
+  <a href="#-current-engineering-state"><strong>System Status</strong></a>
+  &nbsp;•&nbsp;
+  <a href="#-architecture"><strong>Architecture</strong></a>
+  &nbsp;•&nbsp;
+  <a href="#-run-plantpulse"><strong>Run PlantPulse</strong></a>
+  &nbsp;•&nbsp;
+  <a href="#-security--trust-boundary"><strong>Security</strong></a>
+  &nbsp;•&nbsp;
+  <a href="docs/ROADMAP.md"><strong>Roadmap</strong></a>
+</p>
+<!-- DPN-REPO-SHOWCASE:END -->
+
+# 🌿 DPN PlantPulse
 
 > **AI Plant Intelligence & Health Monitoring**  
 > **DEVELOP. PIONEER. NAVIGATE.**
 
-DPN PlantPulse is a mobile-first plant intelligence platform from DPN Technology. The goal is not to create a branded clone of an existing plant identifier. PlantPulse is designed around a DPN-specific idea: every plant becomes a continuously monitored biological asset with an evolving health record.
+**DPN PlantPulse** is DPN Technology's mobile-first biological intelligence platform. It is designed around one core idea:
 
-## v0.8 mobile-to-platform connectivity
+> A plant should not be treated as a one-time identification result. It should become a living digital asset with an evolving health record, care history, scan history, sensor context, predictive signals, and synchronized DPN platform identity.
 
-The repository now contains the Expo / React Native client, runnable DPN Platform backend service, and the first real mobile-to-platform synchronization path.
+PlantPulse combines a React Native mobile experience, plant-health intelligence workflows, offline-first records, optional sensor telemetry, secure cloud synchronization, and a DPN Platform backend.
 
-### Working in the prototype
+It is **not** intended to be a branded clone of an existing plant identifier.
 
-- DPN PlantPulse home dashboard
-- Plant Network health overview
-- live camera scanner
-- photo-library import
-- seven scan modes: Identify, Health, Disease, Leaf, Pest, Soil, Growth
-- PlantPulse Score (0–100)
-- health telemetry breakdown
-- observations + prioritized action plan
-- toxicity/safety warning surface
-- My Plants collection
-- plant profile + history timeline
-- Care Command queue
-- versioned local persistence with automatic v0.1 → v0.2 → v0.3 → v0.4 → v0.5 → v0.6 migration
-- persistent per-plant scan history
-- repeat scans can update an existing plant
-- real care actions with timestamped timeline writes
-- calendar-based watering and feeding schedules
-- editable plant name, room/location, care intervals, and notes
-- replaceable Plant Intelligence service contract
-- DPN Vision API multipart adapter
-- confidence bands + CONFIDENT / REVIEW / UNKNOWN states
-- ranked species candidates
-- capture-quality scoring contract + rescan guidance
-- ranked disease/pest/stress findings
-- explainable evidence channels
-- growth comparison against saved scan history
-- uncertain scans cannot overwrite confirmed plant identity
-- 7-day PlantPulse prediction engine
-- confidence-scored health trend analytics
-- predictive watchlist for elevated-risk plants
-- explainable adaptive care recommendations
-- prototype species-aware care baselines
-- persistent Helpful / Not Helpful / Dismiss feedback
-- feedback-aware recommendation ranking
-- explicit Apply action for suggested interval changes
-- adaptive changes recorded in the plant timeline
-- dedicated Sensor Network dashboard
-- BLE sensor protocol/adapter contract
-- Wi-Fi gateway telemetry client
-- measured soil moisture, soil/air temperature, humidity, light, EC, and pH records
-- sensor reading quality validation
-- device ONLINE / STALE / OFFLINE health
-- battery and telemetry anomaly alerts
-- alert acknowledgement
-- measured telemetry history charts
-- sensor-aware adaptive recommendations and prediction confidence
-- offline-first per-plant revision tracking
-- LOCAL_ONLY / DIRTY / SYNCED / CONFLICT / ERROR sync states
-- authenticated DPN Platform API client contract
-- pull-before-push conflict detection
-- cloud media upload-grant contract
-- local image URI stripping before cloud serialization
-- runtime-only DPN access-token boundary
-- device registration contract
-- PlantPulse QR/deep-link tags
-- QR tag camera scanner
-- DPN Platform dashboard
-- in-app notification center/candidate engine
-- Fastify / Node 22 DPN Platform service
-- PostgreSQL plant/device/tag/audit persistence
-- server-side optimistic concurrency with stale-write rejection
-- authenticated API rate limiting with HTTP 429 enforcement
-- JWKS JWT identity verification
-- S3-compatible signed image upload grants
-- backend API + PostgreSQL integration tests
-- Docker platform service
-- local PostgreSQL + MinIO compose environment
-- native SecureStore-backed DPN session restoration
-- configurable DPN Platform endpoint
-- actual signed image PUT uploads
-- cloud image-key persistence before record sync
-- automatic media-upload deduplication
-- foreground/app-resume sync retry
-- exponential retry metadata persisted across restarts
-- explicit KEEP LOCAL / USE REMOTE conflict resolution
-- stable mobile device enrollment
-- Expo push-token enrollment scaffold
-- development-only local backend connection screen
-- mobile platform connectivity integration tests
-- PlantPulse AI rule-based prototype
-- CI validation
-- CodeQL JavaScript/TypeScript scanning
-- Dependabot configuration
+---
 
-## Important prototype boundary
+## 🧬 Current Engineering State
 
-The mobile client, v0.7 backend, and v0.8 signed media/synchronization path are real. **PlantPulse still does not claim that production DPN Identity, a managed PostgreSQL deployment, production object-storage policy/KMS, DNS/TLS/API gateway, remote push delivery infrastructure, physical DPN sensor hardware, native BLE implementation, production-trained botanical model, or calibrated agronomic model have been provisioned/deployed.**
+| Layer | Current state | Evidence in this repository |
+| --- | --- | --- |
+| **Mobile application** | ✅ Implemented | Expo / React Native client, scanner, plant records, care, sensors, platform UI |
+| **PlantPulse Score** | ✅ Implemented prototype | 0–100 score + telemetry breakdown + longitudinal history |
+| **Vision workflow** | ✅ Client contract / prototype provider | camera, image import, confidence, findings, evidence, growth comparison |
+| **Adaptive care** | ✅ Implemented advisory engine | trend model, 7-day projection, recommendation feedback and apply flow |
+| **Sensor network** | ✅ Protocol + telemetry model | moisture, temperature, humidity, light, EC, pH, device state and alerts |
+| **Offline-first records** | ✅ Implemented | local/remote revisions, dirty state, conflict detection, retry metadata |
+| **DPN Platform service** | ✅ Implemented | Fastify / Node 22, PostgreSQL, JWT/JWKS, media grants, devices, tags |
+| **Signed media sync** | ✅ Implemented | signed PUT upload path, cloud object keys, media deduplication |
+| **Conflict recovery** | ✅ Implemented | explicit **KEEP LOCAL** / **USE REMOTE** resolution |
+| **Native secret storage** | ✅ Implemented | Expo SecureStore on Android/iOS |
+| **Push enrollment** | 🟡 Client scaffold | permission flow + token/device enrollment; remote delivery worker still pending |
+| **Production botanical AI** | ⛔ Not claimed | production model training/calibration remains future work |
+| **Production DPN cloud deployment** | ⛔ Not claimed | production identity, managed DB/storage, DNS/TLS/gateway remain provisioning work |
 
-The current analysis adapter intentionally generates deterministic local prototype results. This lets us build, test, and refine the complete mobile experience before connecting the DPN Plant Intelligence backend.
+> **Repository presentation rule:** PlantPulse visuals describe the product and repository architecture. They must never be presented as proof that an undeployed backend, model, sensor, or production service is already live.
 
-Do not rely on local prototype results for ingestion, pet safety, toxicity, diagnosis, pesticide use, or treatment decisions. The production DPN Vision backend is an adapter target, not a claimed completed model.
+---
 
-## Run it
+## 🌱 PlantPulse Intelligence Stack
 
-Requirements:
+<table>
+<tr>
+<td width="25%" valign="top">
 
-- Node.js 22.13+
+### 👁 Vision
+- Live camera scanner
+- Photo-library import
+- Identify / Health / Disease
+- Leaf / Pest / Soil / Growth
+- Confidence bands
+- Ranked candidates
+- Evidence surfaces
+
+</td>
+<td width="25%" valign="top">
+
+### 💚 Health
+- PlantPulse Score
+- Health telemetry
+- Scan history
+- Timeline events
+- Growth comparison
+- 7-day prediction
+- Risk watchlist
+
+</td>
+<td width="25%" valign="top">
+
+### ⚡ Care
+- Water / feed schedules
+- Care completion events
+- Adaptive recommendations
+- User feedback loop
+- Species-aware baselines
+- Location / room records
+- Predictive care context
+
+</td>
+<td width="25%" valign="top">
+
+### 🌐 Platform
+- Secure identity session
+- Offline-first revisions
+- PostgreSQL backend
+- Signed image upload
+- Conflict recovery
+- Device enrollment
+- PlantPulse QR tags
+
+</td>
+</tr>
+</table>
+
+---
+
+## 📡 Biological Network Telemetry
+
+PlantPulse treats every saved plant like a monitored node in a biological network.
+
+| Signal | PlantPulse behavior |
+| --- | --- |
+| **Health** | current PlantPulse Score and score band |
+| **Hydration** | scan evidence + care history + optional measured sensor context |
+| **Light** | image-derived compatibility today; measured sensor data where connected |
+| **Nutrition** | advisory signal and feeding history |
+| **Disease / pest risk** | confidence-scored candidate findings, not absolute diagnosis |
+| **Growth** | longitudinal scan comparison |
+| **Environment** | optional measured temperature, humidity, moisture, light, EC and pH |
+| **Sync state** | LOCAL_ONLY / DIRTY / SYNCED / CONFLICT / ERROR |
+| **Predictive state** | LOW / WATCH / ELEVATED / HIGH |
+
+### PlantPulse Score
+
+| Score | State |
+| ---: | --- |
+| **90–100** | 🟢 Excellent |
+| **75–89** | 🟢 Healthy |
+| **60–74** | 🟡 Fair |
+| **40–59** | 🟠 Poor |
+| **0–39** | 🔴 Critical |
+
+The current score is a product-development model. A future production score is intended to combine calibrated scan evidence, care history, environmental context, trend data, and measured sensor telemetry.
+
+---
+
+## 🏗 Architecture
+
+```mermaid
+flowchart LR
+  A["PlantPulse Mobile<br/>Expo / React Native"] --> V["Plant Intelligence<br/>Vision Contract"]
+  A --> C["Adaptive Care<br/>Prediction Engine"]
+  A --> S["Sensor Network<br/>BLE + Wi-Fi Contracts"]
+  A --> L["Offline-First<br/>Plant Records"]
+
+  L --> P["DPN Platform API<br/>Fastify / Node 22"]
+  P --> I["DPN Identity<br/>JWKS / JWT"]
+  P --> DB[("PostgreSQL")]
+  P --> O["S3-Compatible<br/>Object Storage"]
+  P --> D["Device + Tag<br/>Enrollment"]
+
+  V -. production model target .-> M["DPN Vision<br/>Model Services"]
+  S -. native hardware path .-> H["DPN PlantPulse<br/>Sensors"]
+```
+
+### Synchronization path
+
+```text
+LOCAL PLANT CHANGE
+      │
+      ├── mark local revision DIRTY
+      │
+      ├── upload pending local image
+      │      └── signed object-storage PUT
+      │
+      ├── pull current remote revisions
+      │
+      ├── compare local / remote
+      │      ├── clean → continue
+      │      └── divergent → CONFLICT
+      │
+      ├── push cloud-safe plant record
+      │
+      ├── claim PlantPulse tag
+      │
+      └── enroll / refresh client device
+```
+
+PlantPulse does **not** silently use last-write-wins when both sides changed. Conflicts are blocked until the user explicitly chooses **KEEP LOCAL** or **USE REMOTE**.
+
+---
+
+## 🛡 Security & Trust Boundary
+
+DPN PlantPulse is designed so product polish does not hide engineering boundaries.
+
+### Implemented security controls
+
+- native bearer-token persistence through **Expo SecureStore** on Android/iOS;
+- bearer tokens deliberately stripped from AsyncStorage platform state;
+- JWKS-backed JWT signature verification on the platform service;
+- issuer, audience and tenant-claim validation;
+- tenant-scoped PostgreSQL queries;
+- server-side optimistic concurrency;
+- authenticated API rate limiting with HTTP **429**;
+- signed, short-lived media upload grants;
+- upload content-type and size validation;
+- security headers;
+- audit-event persistence;
+- CodeQL scanning;
+- dependency audit gates;
+- real PostgreSQL integration tests.
+
+### Not yet represented as production-complete
+
+- production DPN One / OIDC login;
+- renewable token refresh + revocation UX;
+- production PostgreSQL deployment;
+- production object-storage bucket/KMS policy;
+- production DNS/TLS/API gateway;
+- production push-delivery worker/provider;
+- OS-level background synchronization;
+- production botanical computer-vision models;
+- native PlantPulse BLE hardware implementation;
+- calibrated agronomic prediction models.
+
+> Plant identification and health inference are probabilistic. PlantPulse must expose uncertainty and must not convert low-confidence inference into absolute toxicity, pesticide, ingestion, diagnosis, or treatment claims.
+
+See [SECURITY.md](SECURITY.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+---
+
+## 🛰 DPN Platform Surface
+
+The current platform layer includes:
+
+```text
+GET  /health
+GET  /ready
+GET  /v1/me
+GET  /v1/plants
+PUT  /v1/plants/:plantId
+POST /v1/media/uploads
+POST /v1/devices
+POST /v1/plant-tags/claim
+```
+
+The backend currently provides:
+
+- Fastify / Node.js 22 runtime;
+- PostgreSQL persistence;
+- row-locked optimistic revision checks;
+- device registration;
+- unique PlantPulse tag claiming;
+- audit events;
+- S3-compatible signed uploads;
+- local Docker / PostgreSQL / MinIO development environment;
+- integration coverage against real disposable PostgreSQL in CI.
+
+See [docs/PLATFORM_API.md](docs/PLATFORM_API.md) and [server/README.md](server/README.md).
+
+---
+
+## 📲 Run PlantPulse
+
+### Requirements
+
+- Node.js **22.13+**
 - npm
-- Expo Go on a physical device for fast camera testing, or a configured Android/iOS development environment
+- Expo-compatible Android/iOS development environment
+- Expo Go for basic camera/UI testing
+- development build for native features that Expo Go does not support
+
+### Mobile client
 
 ```bash
 npm install
 npm start
 ```
-
-Then scan the Expo QR code with a compatible device.
 
 Useful commands:
 
@@ -124,73 +305,178 @@ Useful commands:
 npm run android
 npm run ios
 npm run web
+
 npm run typecheck
 npm run doctor
+npm run test:mobile-platform
+
 npm run server:typecheck
 npm run server:build
 npm run server:test
-npm run test:mobile-platform
 ```
 
-Run the local platform stack:
+### Local DPN Platform stack
 
 ```bash
 docker compose -f docker-compose.platform.yml up --build
 ```
 
-The local stack includes PostgreSQL, MinIO-compatible object storage, and the PlantPulse platform service. Development builds can connect to that stack from the DPN Platform screen. See [server/README.md](server/README.md) for the development identity format and production configuration.
+The local stack includes:
 
-Mobile runtime configuration uses public build-time values only:
+- PlantPulse platform service;
+- PostgreSQL;
+- MinIO-compatible object storage.
+
+Development builds can connect to that local service from the **DPN Platform** screen.
+
+### Mobile runtime environment
+
+Copy **.env.example** and configure public build-time values only:
 
 ```text
 EXPO_PUBLIC_DPN_PLATFORM_BASE_URL=
 EXPO_PUBLIC_EAS_PROJECT_ID=
 ```
 
-Never put bearer tokens, refresh tokens, database credentials, or object-store credentials in `EXPO_PUBLIC_*` variables.
-
-## Visual direction
-
-PlantPulse keeps DPN's core identity while adding a biological-intelligence layer:
-
-- near-black operational surfaces
-- chlorophyll / emerald health signals
-- DPN red reserved for critical states and future alerts
-- subtle binary-network language
-- scanner reticles
-- readable telemetry cards
-- health states designed for fast interpretation
-
-## PlantPulse Score
-
-| Score | State |
-| ---: | --- |
-| 90–100 | Excellent |
-| 75–89 | Healthy |
-| 60–74 | Fair |
-| 40–59 | Poor |
-| 0–39 | Critical |
-
-The production score is planned to combine scan evidence, care history, environmental context, trend data, and optional sensor telemetry.
-
-## Architecture
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/DATA_MODEL.md](docs/DATA_MODEL.md), [docs/VISION_API.md](docs/VISION_API.md), [docs/ADAPTIVE_CARE.md](docs/ADAPTIVE_CARE.md), and [docs/SENSOR_PROTOCOL.md](docs/SENSOR_PROTOCOL.md), and [docs/PLATFORM_API.md](docs/PLATFORM_API.md).
-
-## Roadmap
-
-See [docs/ROADMAP.md](docs/ROADMAP.md).
-
-## Product direction
-
-PlantPulse is structured to expand into:
-
-- **PlantPulse Home** — houseplants and home gardens
-- **PlantPulse Pro** — landscapers, nurseries, and service teams
-- **PlantPulse Grow** — greenhouses and controlled growing
-- **PlantPulse Enterprise** — large sensor-connected deployments
+> Never place access tokens, refresh tokens, private keys, database passwords, object-store credentials, or other secrets in EXPO_PUBLIC variables.
 
 ---
 
-**DPN Technology**  
-**DEVELOP. PIONEER. NAVIGATE.**
+## 🗂 Repository Map
+
+```text
+App.tsx                         Main PlantPulse mobile application surface
+src/
+  care*.ts                      Care scheduling, intelligence and recommendation logic
+  sensors.ts                    Sensor telemetry / alert model
+  platformRuntime.ts            Mobile sync / retry / device / conflict orchestration
+  platformSync.ts               Revision reconciliation and conflict handling
+  mediaSync.ts                  Signed media upload execution
+  secureIdentity.ts             Native SecureStore identity boundary
+  services/
+    plantIntelligence.ts        Vision provider abstraction
+    platformApi.ts              DPN Platform mobile API client
+
+server/
+  src/app.ts                    Fastify API surface
+  src/auth.ts                   JWKS + development auth modes
+  src/postgresRepository.ts     PostgreSQL persistence and concurrency
+  src/objectStore.ts            Signed S3-compatible media grants
+  db/schema.sql                 Platform database schema
+  test/                         API + PostgreSQL integration coverage
+
+docs/
+  ARCHITECTURE.md
+  DATA_MODEL.md
+  VISION_API.md
+  ADAPTIVE_CARE.md
+  SENSOR_PROTOCOL.md
+  PLATFORM_API.md
+  ROADMAP.md
+
+.github/
+  readme-hero.svg               PlantPulse repository hero
+  repo-showcase.svg             Capability mesh
+  workflows/                    CI + CodeQL
+```
+
+---
+
+## 🧪 Quality Gates
+
+Every major PlantPulse change is expected to clear:
+
+```text
+Mobile TypeScript
+Platform TypeScript
+Platform build
+Mobile platform connectivity tests
+Expo Doctor
+Critical dependency audit
+PostgreSQL schema migration
+PostgreSQL integration tests
+JavaScript / TypeScript CodeQL
+GitHub Advanced Security
+```
+
+No red gate is treated as cosmetic.
+
+---
+
+## 🖼 Repository Visual Evidence
+
+<table>
+<tr>
+<td align="center" width="50%">
+  <img src=".github/readme-hero.svg" alt="PlantPulse repository hero" width="100%"><br>
+  <sub>DPN PlantPulse repository identity</sub>
+</td>
+<td align="center" width="50%">
+  <img src=".github/repo-showcase.svg" alt="PlantPulse capability mesh" width="100%"><br>
+  <sub>PlantPulse capability / architecture presentation</sub>
+</td>
+</tr>
+</table>
+
+> These are **repository-native presentation assets**, not screenshots of runtime execution. Runtime screenshots should only be added when captured from an actual build and labeled with their source/version.
+
+---
+
+## 🧭 Roadmap
+
+The next production-readiness priorities are:
+
+1. **DPN Identity / OIDC sign-in** — real DPN One identity flow instead of development identity.
+2. **Renewable session lifecycle** — refresh, revocation and device trust.
+3. **Background synchronization** — native OS task scheduling rather than foreground-only retry.
+4. **Remote push delivery** — server-side outbox worker/provider.
+5. **Media verification** — server-side completion and object validation.
+6. **Production deployment** — managed PostgreSQL, object storage, DNS/TLS/API gateway and observability.
+7. **Production Plant Intelligence** — trained/calibrated botanical models and verified safety knowledge.
+
+Full engineering roadmap: [docs/ROADMAP.md](docs/ROADMAP.md)
+
+---
+
+## 🌿 Product Family Direction
+
+| Product | Target |
+| --- | --- |
+| **PlantPulse Home** | houseplants, home gardens and personal collections |
+| **PlantPulse Pro** | landscapers, nurseries and professional service teams |
+| **PlantPulse Grow** | greenhouses and controlled growing environments |
+| **PlantPulse Enterprise** | large multi-site sensor-connected plant operations |
+
+---
+
+<!-- DPN-ECOSYSTEM:START -->
+## ⚡ DPN Ecosystem
+
+**Category:** Biological Intelligence / AI / Connected Systems
+
+[**DPN One**](https://github.com/DPN-Technology/DPN-One) ·
+[**DPN AI**](https://github.com/DPN-Technology/DPN-AI) ·
+[**DPN Operational Control**](https://github.com/DPN-Technology/DPN-Operational-Control) ·
+[**DPN Network Mapper**](https://github.com/DPN-Technology/DPN-Network-Mapper) ·
+[**DPN Website**](https://github.com/DPN-Technology/DPN-Website)
+
+<details>
+<summary><strong>Explore the broader DPN Technology platform</strong></summary>
+
+| Control & Infrastructure | Business Operations | Development & AI | Simulation & Interactive |
+| --- | --- | --- | --- |
+| [DPN Operational Control](https://github.com/DPN-Technology/DPN-Operational-Control) | [DPN One](https://github.com/DPN-Technology/DPN-One) | [DPN AI](https://github.com/DPN-Technology/DPN-AI) | [DPN War Simulator](https://github.com/DPN-Technology/DPN-War-Simulator) |
+| [DPN Executive Control System](https://github.com/DPN-Technology/DPN-Executive-Control-System) | [DPN Human Resources](https://github.com/DPN-Technology/DPN-Human-Resources-Software) | [Death the Developer](https://github.com/DPN-Technology/DPN-Death-the-Developer) | [Tool & Die Simulator](https://github.com/DPN-Technology/DPN-Tool-Die-Simulator) |
+| [DPN WatchTower](https://github.com/DPN-Technology/DPN-Watch-Tower) | [DPN Workforce](https://github.com/DPN-Technology/DPN-Workforce-Time-Management-System) | [DPN Website](https://github.com/DPN-Technology/DPN-Website) | [MemeSpace](https://github.com/DPN-Technology/MemeSpace) |
+| [DPN Network Mapper](https://github.com/DPN-Technology/DPN-Network-Mapper) | [DPN Service Desk](https://github.com/DPN-Technology/DPN-Service-Desk) | **DPN PlantPulse** | [DPN Aqua Labs](https://github.com/DPN-Technology/DPN-Aqua-Labs-Point-of-Sale-System) |
+
+</details>
+<!-- DPN-ECOSYSTEM:END -->
+
+---
+
+<p align="center">
+  <strong>DPN TECHNOLOGY // DPN PLANTPULSE</strong><br>
+  <sub>WE DEVELOP WHAT DOESN'T EXIST. WE PIONEER WHAT COMES NEXT. WE NAVIGATE THE FUTURE.</sub><br><br>
+  <strong>🌱 DEVELOP BIOLOGICAL INTELLIGENCE.</strong>
+</p>
