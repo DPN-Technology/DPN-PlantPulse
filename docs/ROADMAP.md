@@ -70,15 +70,28 @@
 - [ ] Production-calibrated prediction model
 
 ## v0.5 — Sensors
-- [ ] BLE sensor protocol
-- [ ] Wi-Fi gateway support
-- [ ] Moisture
-- [ ] Temperature / humidity
-- [ ] Light
-- [ ] EC
-- [ ] pH
-- [ ] Telemetry charts
-- [ ] Sensor anomaly alerts
+- [x] BLE sensor adapter/protocol contract
+- [x] Wi-Fi gateway HTTP client + telemetry envelope
+- [x] Soil moisture telemetry model
+- [x] Soil / air temperature telemetry model
+- [x] Humidity telemetry model
+- [x] Measured light telemetry model
+- [x] EC telemetry model
+- [x] pH telemetry model
+- [x] Reading domain validation + quality states
+- [x] Device freshness / online / stale / offline state
+- [x] Battery and invalid/suspect reading alerts
+- [x] Alert acknowledgement
+- [x] Sensor Network dashboard
+- [x] Per-plant telemetry surfaces
+- [x] Measured telemetry history charts
+- [x] Sensor-aware Prediction Engine context
+- [x] v0.4 → v0.5 persistence migration
+- [ ] Native BLE implementation / dev-build integration
+- [ ] Gateway provisioning UI
+- [ ] Configurable per-species sensor thresholds
+- [ ] Background telemetry sync
+- [ ] Signed hardware identity / device attestation
 
 ## Product families
 - PlantPulse Home

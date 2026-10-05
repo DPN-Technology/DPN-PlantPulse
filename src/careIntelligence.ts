@@ -1,5 +1,6 @@
 import { daysUntil } from "./care";
 import { getSpeciesCareBaseline } from "./speciesCare";
+import { latestMeasuredReading } from "./sensors";
 import {
   CareIntelligenceSnapshot,
   CareRecommendation,
@@ -100,6 +101,10 @@ export function predictPlantHealth(plant: Plant, horizonDays = 7): PlantPredicti
   const projectedScore = clamp(baseline + usableRate * horizonDays);
   const risk = predictionRisk(projectedScore, trend, latest);
   const reasons: string[] = [];
+  const measuredMoisture = latestMeasuredReading(plant, "soilMoisture");
+  const measuredLight = latestMeasuredReading(plant, "light");
+  const measuredAirTemp = latestMeasuredReading(plant, "airTemperature");
+  const measuredHumidity = latestMeasuredReading(plant, "humidity");
 
   if (trend.direction === "DECLINING") reasons.push("Saved scan history shows a negative PlantPulse score trend.");
   if ((latest?.breakdown.hydration ?? 100) < 70) reasons.push("Latest visual hydration signal is below the preferred range.");
@@ -108,15 +113,24 @@ export function predictPlantHealth(plant: Plant, horizonDays = 7): PlantPredicti
   if ((latest?.breakdown.pestRisk ?? 0) >= 25) reasons.push("Latest scan ranked elevated pest-pattern risk.");
   if (daysUntil(plant.nextWaterAt) < 0) reasons.push("The current watering target is overdue.");
   if (daysUntil(plant.nextFeedAt) < 0) reasons.push("The current feeding target is overdue.");
+  if (measuredMoisture && measuredMoisture.value <= 15) reasons.push("A measured soil-moisture sensor reading is very low (" + measuredMoisture.value + "%).");
+  if (measuredMoisture && measuredMoisture.value >= 90) reasons.push("A measured soil-moisture sensor reading is very high (" + measuredMoisture.value + "%).");
+  if (measuredLight && measuredLight.value <= 10) reasons.push("A measured light sensor is reporting near-dark conditions.");
+  if (measuredAirTemp && (measuredAirTemp.value <= 2 || measuredAirTemp.value >= 45)) reasons.push("Measured air temperature is outside the normal PlantPulse operational envelope.");
+  if (measuredHumidity && (measuredHumidity.value <= 10 || measuredHumidity.value >= 95)) reasons.push("Measured humidity is at an operational extreme.");
   if (!reasons.length) reasons.push("No major risk signal is currently dominating the saved plant record.");
+
+  const sensorEvidenceCount = [measuredMoisture, measuredLight, measuredAirTemp, measuredHumidity].filter(Boolean).length;
 
   return {
     horizonDays,
     projectedScore,
     risk,
-    confidence: clamp(Math.min(90, trend.confidence + (latest ? 10 : 0))),
+    confidence: clamp(Math.min(95, trend.confidence + (latest ? 10 : 0) + sensorEvidenceCount * 3)),
     reasons,
-    disclaimer: "Projection is an advisory estimate from saved scans and care records, not a guarantee or sensor measurement."
+    disclaimer: sensorEvidenceCount > 0
+      ? "Projection is advisory. Valid measured sensor context is included where available, but the projection is not a calibrated agronomic forecast."
+      : "Projection is an advisory estimate from saved scans and care records, not a guarantee or sensor measurement."
   };
 }
 
@@ -147,6 +161,9 @@ export function buildCareRecommendations(plant: Plant): CareRecommendation[] {
   const nutritionAverage = average(recent.map((scan) => scan.breakdown.nutrition));
   const diseasePeak = recent.length ? Math.max(...recent.map((scan) => scan.breakdown.diseaseRisk)) : 0;
   const pestPeak = recent.length ? Math.max(...recent.map((scan) => scan.breakdown.pestRisk)) : 0;
+  const measuredMoisture = latestMeasuredReading(plant, "soilMoisture");
+  const measuredLight = latestMeasuredReading(plant, "light");
+  const measuredAirTemp = latestMeasuredReading(plant, "airTemperature");
 
   if (
     speciesBaseline &&
@@ -165,6 +182,52 @@ export function buildCareRecommendations(plant: Plant): CareRecommendation[] {
       "LOW",
       48,
       { suggestedWaterIntervalDays: speciesBaseline.waterCheckIntervalDays }
+    ));
+  }
+
+  if (measuredMoisture && measuredMoisture.value <= 15) {
+    recommendations.push(recommendation(
+      "sensor-soil-moisture-low",
+      "water",
+      "Measured soil moisture is very low",
+      "A connected sensor is reporting " + measuredMoisture.value + "%. Confirm probe placement and substrate conditions before watering.",
+      ["This value comes from a measured sensor reading, not image inference.", "Reading quality: " + measuredMoisture.quality + "."],
+      "HIGH",
+      88
+    ));
+  } else if (measuredMoisture && measuredMoisture.value >= 90) {
+    recommendations.push(recommendation(
+      "sensor-soil-moisture-high",
+      "inspect",
+      "Measured soil moisture is very high",
+      "A connected sensor is reporting " + measuredMoisture.value + "%. Review drainage, probe placement, and recent watering before adding more water.",
+      ["This value comes from a measured sensor reading, not image inference.", "Reading quality: " + measuredMoisture.quality + "."],
+      "HIGH",
+      88
+    ));
+  }
+
+  if (measuredLight && measuredLight.value <= 10) {
+    recommendations.push(recommendation(
+      "sensor-light-near-dark",
+      "light",
+      "Measured light is near zero",
+      "The connected light sensor is reporting " + measuredLight.value + " lux. Verify the sensor is exposed correctly and review plant placement if this persists during intended light hours.",
+      ["This is a measured light reading.", "No species-specific daily-light integral is modeled yet."],
+      "MEDIUM",
+      85
+    ));
+  }
+
+  if (measuredAirTemp && (measuredAirTemp.value <= 2 || measuredAirTemp.value >= 45)) {
+    recommendations.push(recommendation(
+      "sensor-temperature-extreme",
+      "environment",
+      "Measured air temperature is extreme",
+      "The connected temperature sensor reports " + measuredAirTemp.value + "°C. Confirm the reading and protect the plant from sustained extreme exposure if accurate.",
+      ["This is a measured temperature reading.", "PlantPulse v0.5 uses an operational envelope, not a species-calibrated temperature model."],
+      "HIGH",
+      90
     ));
   }
 

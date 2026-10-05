@@ -1,4 +1,4 @@
-export type Screen = "home" | "scan" | "collection" | "care" | "ai" | "plant" | "result";
+export type Screen = "home" | "scan" | "collection" | "care" | "sensors" | "ai" | "plant" | "result";
 
 export type ScanMode =
   | "identify"
@@ -19,6 +19,11 @@ export type TrendDirection = "IMPROVING" | "STABLE" | "DECLINING" | "INSUFFICIEN
 export type PredictionRisk = "LOW" | "WATCH" | "ELEVATED" | "HIGH";
 export type RecommendationPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 export type RecommendationFeedbackValue = "HELPFUL" | "NOT_HELPFUL" | "APPLIED" | "DISMISSED";
+export type SensorMetric = "soilMoisture" | "soilTemperature" | "airTemperature" | "humidity" | "light" | "ec" | "ph";
+export type SensorTransport = "BLE" | "WIFI_GATEWAY";
+export type SensorStatus = "ONLINE" | "STALE" | "OFFLINE" | "PAIRING" | "ERROR";
+export type SensorReadingQuality = "GOOD" | "SUSPECT" | "INVALID";
+export type SensorAlertSeverity = "INFO" | "WATCH" | "WARNING" | "CRITICAL";
 
 export interface HealthBreakdown {
   leaf: number;
@@ -154,6 +159,50 @@ export interface RecommendationFeedback {
   at: string;
 }
 
+export interface SensorDevice {
+  id: string;
+  name: string;
+  transport: SensorTransport;
+  status: SensorStatus;
+  capabilities: SensorMetric[];
+  firmwareVersion?: string;
+  batteryPercent?: number;
+  rssi?: number;
+  gatewayId?: string;
+  lastSeenAt?: string;
+}
+
+export interface SensorReading {
+  id: string;
+  sensorId: string;
+  metric: SensorMetric;
+  value: number;
+  unit: "%" | "°C" | "lux" | "mS/cm" | "pH";
+  observedAt: string;
+  receivedAt: string;
+  quality: SensorReadingQuality;
+  measured: true;
+}
+
+export interface SensorAlert {
+  id: string;
+  sensorId?: string;
+  metric?: SensorMetric;
+  severity: SensorAlertSeverity;
+  title: string;
+  detail: string;
+  createdAt: string;
+  acknowledgedAt?: string;
+}
+
+export interface SensorNetworkSnapshot {
+  online: number;
+  stale: number;
+  offline: number;
+  alertCount: number;
+  latestReadings: Partial<Record<SensorMetric, SensorReading>>;
+}
+
 export interface Plant {
   id: string;
   nickname: string;
@@ -173,6 +222,9 @@ export interface Plant {
   scanHistory: PlantScan[];
   timeline: TimelineEvent[];
   recommendationFeedback: RecommendationFeedback[];
+  sensorDevices: SensorDevice[];
+  sensorReadings: SensorReading[];
+  sensorAlerts: SensorAlert[];
 }
 
 export interface PlantProfileUpdate {

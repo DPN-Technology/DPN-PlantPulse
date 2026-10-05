@@ -68,6 +68,7 @@ const nav: Array<{ key: Screen; label: string; icon: string }> = [
   { key: "scan", label: "Scan", icon: "◎" },
   { key: "collection", label: "Plants", icon: "♧" },
   { key: "care", label: "Care", icon: "✓" },
+  { key: "sensors", label: "Sensors", icon: "⌁" },
   { key: "ai", label: "AI", icon: "✦" }
 ];
 
