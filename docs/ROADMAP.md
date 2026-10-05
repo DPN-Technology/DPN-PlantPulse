@@ -179,8 +179,8 @@
 - [x] push permission/token enrollment scaffold
 - [x] device registration with optional push token
 - [x] mobile connectivity integration tests in CI
-- [ ] Production DPN Identity/OIDC sign-in UI
-- [ ] renewable refresh-token flow
+- [x] Production-configurable DPN Identity/OIDC sign-in UI
+- [x] renewable refresh-token flow
 - [ ] native background-task synchronization
 - [ ] production remote push worker/provider
 - [ ] server-side media completion verification
@@ -188,10 +188,11 @@
 
 ## v0.9 — Production readiness
 - [x] Production-readiness gate documented
-- [ ] DPN One / OIDC production sign-in
-- [ ] PKCE or equivalent native authorization flow
-- [ ] renewable access-token lifecycle
-- [ ] explicit session revocation
+- [x] DPN One / OIDC mobile client implementation
+- [ ] DPN One OIDC authorization-server deployment
+- [x] PKCE native authorization flow
+- [x] renewable access-token lifecycle
+- [x] explicit provider revocation attempt on logout
 - [ ] native background task synchronization
 - [ ] production push outbox worker/provider
 - [ ] media completion verification
