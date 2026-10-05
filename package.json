@@ -1,6 +1,6 @@
 {
   "name": "dpn-plantpulse",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "private": true,
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
@@ -14,7 +14,8 @@
     "server:test": "npm run test --workspace @dpn/plantpulse-platform",
     "server:build": "npm run build --workspace @dpn/plantpulse-platform",
     "server:migrate": "npm run db:migrate --workspace @dpn/plantpulse-platform",
-    "test:mobile-platform": "tsx --test test-mobile/**/*.test.ts"
+    "test:mobile-platform": "tsx --test test-mobile/**/*.test.ts",
+    "validate:dpn-control": "node tools/validate-dpn-control-contract.mjs"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
