@@ -42,6 +42,26 @@ export interface RegisteredDevice {
   registeredAt: string;
   lastSeenAt: string;
   pushToken?: string;
+  revokedAt?: string;
+}
+
+export interface NotificationPreferences {
+  care: boolean;
+  prediction: boolean;
+  sensor: boolean;
+  sync: boolean;
+  security: boolean;
+  quietHoursEnabled: boolean;
+  quietStart: string;
+  quietEnd: string;
+  timeZone: string;
+  updatedAt?: string;
+}
+
+export interface TenantOperationalHealth {
+  plantCount: number;
+  activeDevices: number;
+  revokedDevices: number;
 }
 
 export interface PlantTagClaimInput {
