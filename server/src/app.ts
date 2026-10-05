@@ -3,6 +3,7 @@ import rateLimit from "@fastify/rate-limit";
 import { AuthVerifier } from "./auth.js";
 import { ObjectStore } from "./objectStore.js";
 import { PlatformRepository } from "./repository.js";
+import { NotificationOutboxRepository, NotificationKind, NotificationQueueItem } from "./notificationTypes.js";
 import {
   AuthContext,
   JsonObject,
@@ -16,6 +17,7 @@ export interface PlatformAppOptions {
   repository: PlatformRepository;
   objectStore: ObjectStore;
   authVerifier: AuthVerifier;
+  notificationRepository?: NotificationOutboxRepository;
   logger?: boolean;
   rateLimitMax?: number;
   rateLimitTimeWindow?: string;
@@ -117,7 +119,7 @@ export async function createPlatformApp(options: PlatformAppOptions) {
   app.get("/health", async () => ({
     service: "dpn-plantpulse-platform",
     status: "ok",
-    version: "0.7.0"
+    version: "0.10.0"
   }));
 
   app.get("/ready", async (_request, reply) => {
@@ -220,6 +222,56 @@ export async function createPlatformApp(options: PlatformAppOptions) {
     return reply.code(201).send(device);
   });
 
+  app.post("/v1/notifications/queue", async (request, reply) => {
+    const auth = await requireAuth(request, reply, options.authVerifier);
+    if (!auth) return;
+    if (!options.notificationRepository) {
+      return reply.code(503).send({
+        error: "notification_delivery_unavailable",
+        message: "Notification delivery is not configured"
+      });
+    }
+    if (!isRecord(request.body) || !Array.isArray(request.body.notifications)) {
+      throw new RequestValidationError("notifications must be an array");
+    }
+    if (request.body.notifications.length < 1 || request.body.notifications.length > 20) {
+      throw new RequestValidationError("notifications must contain between 1 and 20 items");
+    }
+
+    const allowedKinds = new Set<NotificationKind>(["CARE", "PREDICTION", "SENSOR", "SYNC", "SECURITY"]);
+    const items: NotificationQueueItem[] = request.body.notifications.map((value, index) => {
+      if (!isRecord(value)) {
+        throw new RequestValidationError("notification[" + index + "] must be an object");
+      }
+      const sourceId = stringField(value, "sourceId", 200, true)!;
+      const kind = stringField(value, "kind", 32, true)! as NotificationKind;
+      if (!allowedKinds.has(kind)) {
+        throw new RequestValidationError("notification[" + index + "].kind is invalid");
+      }
+      const title = stringField(value, "title", 160, true)!;
+      const body = stringField(value, "body", 1000, true)!;
+      const plantId = stringField(value, "plantId", 160, false);
+      const createdAt = stringField(value, "createdAt", 80, false);
+
+      return {
+        sourceId,
+        kind,
+        title,
+        body,
+        ...(plantId ? { plantId } : {}),
+        ...(createdAt ? { createdAt } : {})
+      };
+    });
+
+    const queued = await options.notificationRepository.enqueueForUser({
+      tenantId: auth.tenantId,
+      userId: auth.userId,
+      items
+    });
+
+    return reply.code(202).send({ queued });
+  });
+
   app.post("/v1/plant-tags/claim", async (request, reply) => {
     const auth = await requireAuth(request, reply, options.authVerifier);
     if (!auth) return;
@@ -288,6 +340,9 @@ export async function createPlatformApp(options: PlatformAppOptions) {
 
   app.addHook("onClose", async () => {
     await options.repository.close();
+    if (options.notificationRepository) {
+      await options.notificationRepository.close();
+    }
   });
 
   return app;
