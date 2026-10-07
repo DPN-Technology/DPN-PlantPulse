@@ -34,6 +34,8 @@ export interface DpnVisionApiClientOptions {
   timeoutMs?: number;
   /** Explicitly approved, calibrated production model versions. Empty means no remote model is trusted. */
   trustedProductionModelVersions?: readonly string[];
+  /** Independent, application-controlled provenance and calibration verification. No verifier means prototype-only. */
+  verifyProductionModelEvidence?: (result: Readonly<ScanResult>) => Promise<boolean>;
 }
 
 export class DpnVisionApiClient implements PlantIntelligenceClient {
@@ -41,12 +43,14 @@ export class DpnVisionApiClient implements PlantIntelligenceClient {
   private readonly authToken?: string;
   private readonly timeoutMs: number;
   private readonly trustedProductionModelVersions: ReadonlySet<string>;
+  private readonly verifyProductionModelEvidence?: (result: Readonly<ScanResult>) => Promise<boolean>;
 
   constructor(options: DpnVisionApiClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, "");
     this.authToken = options.authToken;
     this.timeoutMs = options.timeoutMs ?? 30_000;
     this.trustedProductionModelVersions = new Set(options.trustedProductionModelVersions ?? []);
+    this.verifyProductionModelEvidence = options.verifyProductionModelEvidence;
   }
 
   async analyze(request: AnalyzeScanRequest): Promise<ScanResult> {
@@ -86,8 +90,18 @@ export class DpnVisionApiClient implements PlantIntelligenceClient {
       }
 
       const modelVersion = typeof result.modelVersion === "string" ? result.modelVersion.trim() : "";
-      const trustedProductionModel =
-        modelVersion.length > 0 && this.trustedProductionModelVersions.has(modelVersion);
+      const allowlisted = modelVersion.length > 0 && this.trustedProductionModelVersions.has(modelVersion);
+      // An API payload and a local version allow-list cannot establish model provenance.
+      // Verification errors fail closed; they must never promote remote output to production.
+      let verified = false;
+      if (allowlisted && this.verifyProductionModelEvidence) {
+        try {
+          verified = (await this.verifyProductionModelEvidence(result)) === true;
+        } catch {
+          verified = false;
+        }
+      }
+      const trustedProductionModel = allowlisted && verified;
 
       const boundedResult: ScanResult = {
         ...result,
