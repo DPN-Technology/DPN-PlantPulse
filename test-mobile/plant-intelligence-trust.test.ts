@@ -43,7 +43,8 @@ function result(overrides: Partial<ScanResult> = {}): ScanResult {
 async function withRemoteResult<T>(
   payload: unknown,
   run: (client: DpnVisionApiClient) => Promise<T>,
-  trustedProductionModelVersions: readonly string[] = ["vision-prod-1"]
+  trustedProductionModelVersions: readonly string[] = ["vision-prod-1"],
+  verifyProductionModelEvidence?: (result: Readonly<ScanResult>) => Promise<boolean>
 ): Promise<T> {
   const originalFetch = globalThis.fetch;
   const OriginalFormData = globalThis.FormData;
@@ -62,7 +63,8 @@ async function withRemoteResult<T>(
   try {
     return await run(new DpnVisionApiClient({
       baseUrl: "https://vision.example.test",
-      trustedProductionModelVersions
+      trustedProductionModelVersions,
+      verifyProductionModelEvidence
     }));
   } finally {
     globalThis.fetch = originalFetch;
@@ -99,8 +101,8 @@ test("whitespace model versions are treated as unversioned", async () => {
   assert.equal(scan.modelVersion, "unversioned-remote-model");
 });
 
-test("explicitly trusted model versions may retain production status", async () => {
-  const scan = await withRemoteResult(result(), (client) => client.analyze(request));
+test("allowlisted and independently verified model versions may retain production status", async () => {
+  const scan = await withRemoteResult(result(), (client) => client.analyze(request), ["vision-prod-1"], async () => true);
 
   assert.equal(scan.prototype, false);
   assert.equal(scan.modelVersion, "vision-prod-1");
@@ -110,7 +112,9 @@ test("explicitly trusted model versions may retain production status", async () 
 test("identification uncertainty overrides toxicity guidance even for a trusted model", async () => {
   const scan = await withRemoteResult(
     result({ identificationStatus: "REVIEW", identificationConfidence: 0.61 }),
-    (client) => client.analyze(request)
+    (client) => client.analyze(request),
+    ["vision-prod-1"],
+    async () => true
   );
 
   assert.equal(scan.prototype, false);
@@ -134,4 +138,35 @@ test("an empty trust allowlist keeps every remote model in prototype", async () 
 
   assert.equal(scan.prototype, true);
   assert.match(scan.toxicity, /not approved for production safety decisions/i);
+});
+
+
+test("allowlisted model without independent evidence verifier remains prototype", async () => {
+  const scan = await withRemoteResult(result(), (client) => client.analyze(request));
+  assert.equal(scan.prototype, true);
+  assert.match(scan.toxicity, /not approved for production safety decisions/i);
+});
+
+test("negative provenance or calibration verification fails closed", async () => {
+  const scan = await withRemoteResult(result(), (client) => client.analyze(request), ["vision-prod-1"], async () => false);
+  assert.equal(scan.prototype, true);
+  assert.doesNotMatch(scan.toxicity, /Known toxic to pets/);
+});
+
+test("provenance verifier exceptions fail closed", async () => {
+  const scan = await withRemoteResult(result(), (client) => client.analyze(request), ["vision-prod-1"], async () => {
+    throw new Error("verification unavailable");
+  });
+  assert.equal(scan.prototype, true);
+  assert.match(scan.toxicity, /not approved for production safety decisions/i);
+});
+
+test("unapproved versions cannot invoke a verifier to promote themselves", async () => {
+  let calls = 0;
+  const scan = await withRemoteResult(result({ modelVersion: "unknown" }), (client) => client.analyze(request), ["vision-prod-1"], async () => {
+    calls++;
+    return true;
+  });
+  assert.equal(calls, 0);
+  assert.equal(scan.prototype, true);
 });
